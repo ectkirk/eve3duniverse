@@ -15,6 +15,15 @@ export interface Star {
   life: number
 }
 
+export interface Planet {
+  id: number
+  typeId: number
+  celestialIndex: number
+  radius: number
+  orbitRadius: number
+  orbitPeriod: number
+}
+
 export interface Region {
   id: number
   name: string
@@ -36,6 +45,7 @@ export interface SolarSystem {
   securityStatus: number
   position: Position
   star: Star | null
+  planets: Planet[]
 }
 
 export interface UniverseData {

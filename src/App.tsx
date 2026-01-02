@@ -1,17 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useUniverseData } from './hooks/useUniverseData'
 import { Stars } from './components/Stars'
 import { RegionLabels } from './components/RegionLabels'
 import { CameraController } from './components/CameraController'
 import { PostProcessing } from './components/PostProcessing'
+import { FocusSystem, type FocusInfo } from './components/FocusSystem'
+import { FocusedStar } from './components/FocusedStar'
 import * as styles from './styles'
 
 export function App() {
-  const { systems, regions, loading, error } = useUniverseData()
+  const { systems, regions, constellations, loading, error } = useUniverseData()
+  const [focusInfo, setFocusInfo] = useState<FocusInfo>({ state: 'normal', target: null, dwellProgress: 0 })
   const [showEscapeMenu, setShowEscapeMenu] = useState(false)
   const [colorMode, setColorMode] = useState(0)
   const [showLabels, setShowLabels] = useState(true)
+
+  const handleOrbitExit = useCallback(() => {
+    setFocusInfo({ state: 'normal', target: null, dwellProgress: 0 })
+  }, [])
+
+  const orbitTarget = useMemo(() => {
+    if (focusInfo.state === 'locked' && focusInfo.target) {
+      return {
+        position: focusInfo.target.scenePosition,
+        onExit: handleOrbitExit,
+      }
+    }
+    return null
+  }, [focusInfo.state, focusInfo.target, handleOrbitExit])
 
   useEffect(() => {
     return window.electronAPI.onToggleEscapeMenu(() => {
@@ -38,9 +55,26 @@ export function App() {
         camera={{ position: [0, 0, 100], fov: 75 }}
         style={{ width: '100%', height: '100%', background: '#000' }}
       >
-        <CameraController />
-        {systems.length > 0 && <Stars systems={systems} regions={regions} colorMode={colorMode} />}
+        <CameraController orbitTarget={orbitTarget} />
+        {systems.length > 0 && (
+          <>
+            <Stars systems={systems} regions={regions} colorMode={colorMode} />
+            <FocusSystem
+              systems={systems}
+              regions={regions}
+              constellations={constellations}
+              onFocusChange={setFocusInfo}
+              enabled={focusInfo.state !== 'locked'}
+            />
+          </>
+        )}
         {showLabels && <RegionLabels regions={regions} systems={systems} colorMode={colorMode} />}
+        {focusInfo.state === 'locked' && focusInfo.target && (
+          <FocusedStar
+            system={focusInfo.target.system}
+            position={focusInfo.target.scenePosition}
+          />
+        )}
         <PostProcessing />
       </Canvas>
 
@@ -63,6 +97,43 @@ export function App() {
           <div>Color: {['Star Type', 'Security', 'Region'][colorMode]}</div>
           <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
             WASD: move | Mouse: look | 1/2/3: color | L: labels | ESC: menu
+          </div>
+        </div>
+      )}
+
+      {focusInfo.state === 'dwelling' && focusInfo.target && (
+        <div style={{ ...styles.centered, pointerEvents: 'none' }}>
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle
+              cx="40"
+              cy="40"
+              r="35"
+              fill="none"
+              stroke="rgba(255,255,255,0.2)"
+              strokeWidth="2"
+            />
+            <circle
+              cx="40"
+              cy="40"
+              r="35"
+              fill="none"
+              stroke="rgba(100,200,255,0.8)"
+              strokeWidth="2"
+              strokeDasharray={`${focusInfo.dwellProgress * 220} 220`}
+              strokeLinecap="round"
+              transform="rotate(-90 40 40)"
+            />
+          </svg>
+        </div>
+      )}
+
+      {focusInfo.state === 'locked' && focusInfo.target && (
+        <div style={{ ...styles.centered, pointerEvents: 'none' }}>
+          <div style={{ color: '#6cf', fontFamily: 'monospace', textAlign: 'center' }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{focusInfo.target.system.name}</div>
+            <div style={{ fontSize: '14px', color: '#888', marginTop: '4px' }}>
+              {focusInfo.target.region.name}
+            </div>
           </div>
         </div>
       )}

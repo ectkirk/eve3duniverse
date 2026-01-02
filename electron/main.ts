@@ -5,7 +5,6 @@ import { app, BrowserWindow, screen, ipcMain } from 'electron'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 import { logger, initLogger } from './services/logger.js'
-import { registerRefAPIHandlers } from './services/ref-api.js'
 
 const APP_ROOT = path.join(__dirname, '..')
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -91,7 +90,6 @@ if (!gotTheLock) {
     initLogger()
     logger.info('App starting', { module: 'Main', version: app.getVersion() })
 
-    registerRefAPIHandlers()
     createWindow()
 
     logger.info('Main window created', { module: 'Main' })

@@ -7,3 +7,5 @@ release/
 .DS_Store
 .claude/
 CLAUDE.md
+.tmp/
+sde.zip
