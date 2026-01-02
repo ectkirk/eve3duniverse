@@ -23,6 +23,9 @@ export interface Planet {
   orbitRadius: number
   orbitPeriod: number
   temperature: number
+  eccentricity: number
+  locked: boolean
+  position: Position
 }
 
 export interface Region {

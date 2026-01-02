@@ -195,7 +195,14 @@ const glowFragmentShader = `
   }
 `
 
-function OrbitRing({ radius }: { radius: number }) {
+interface OrbitParams {
+  semiMajor: number
+  semiMinor: number
+  inclination: number
+  longitudeOfAscending: number
+}
+
+function OrbitRing({ orbit }: { orbit: OrbitParams }) {
   const lineRef = useRef<THREE.Line>(null)
 
   const geometry = useMemo(() => {
@@ -203,10 +210,19 @@ function OrbitRing({ radius }: { radius: number }) {
     const pts = []
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2
-      pts.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius))
+      const x = Math.cos(angle) * orbit.semiMajor
+      const z = Math.sin(angle) * orbit.semiMinor
+      const cosInc = Math.cos(orbit.inclination)
+      const sinInc = Math.sin(orbit.inclination)
+      const cosLon = Math.cos(orbit.longitudeOfAscending)
+      const sinLon = Math.sin(orbit.longitudeOfAscending)
+      const rotX = x * cosLon - z * sinLon * cosInc
+      const rotY = z * sinInc
+      const rotZ = x * sinLon + z * cosLon * cosInc
+      pts.push(new THREE.Vector3(rotX, rotY, rotZ))
     }
     return new THREE.BufferGeometry().setFromPoints(pts)
-  }, [radius])
+  }, [orbit])
 
   const material = useMemo(
     () => new THREE.LineBasicMaterial({ color: 0x333344, transparent: true, opacity: 0.3 }),
@@ -219,10 +235,23 @@ function OrbitRing({ radius }: { radius: number }) {
 function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: number }) {
   const meshRef = useRef<THREE.Mesh>(null)
 
-  const scaledOrbit = planet.orbitRadius * ORBIT_VISUAL_SCALE
   const planetRadiusRatio = planet.radius / starRadius
   const scaledRadius = Math.max(0.003, Math.min(0.03, planetRadiusRatio * SCENE_STAR_RADIUS * 2))
-  const initialAngle = planet.celestialIndex * Math.PI * 0.7
+
+  const orbitParams = useMemo((): OrbitParams => {
+    const semiMajor = planet.orbitRadius * ORBIT_VISUAL_SCALE
+    const semiMinor = semiMajor * Math.sqrt(1 - planet.eccentricity * planet.eccentricity)
+    const pos = planet.position
+    const horizontalDist = Math.sqrt(pos.x * pos.x + pos.z * pos.z)
+    const inclination = Math.atan2(pos.y, horizontalDist)
+    const longitudeOfAscending = Math.atan2(-pos.x, pos.z)
+    return { semiMajor, semiMinor, inclination, longitudeOfAscending }
+  }, [planet.orbitRadius, planet.eccentricity, planet.position])
+
+  const initialAngle = useMemo(() => {
+    const pos = planet.position
+    return Math.atan2(-pos.x, pos.z)
+  }, [planet.position])
 
   const appearance = useMemo(() => getPlanetAppearance(planet.typeId), [planet.typeId])
 
@@ -236,13 +265,21 @@ function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: nu
     if (!meshRef.current) return
     const period = Math.max(30, planet.orbitPeriod * 1e-6)
     const angle = initialAngle + (clock.elapsedTime / period) * Math.PI * 2
-    meshRef.current.position.x = Math.cos(angle) * scaledOrbit
-    meshRef.current.position.z = Math.sin(angle) * scaledOrbit
+    const { semiMajor, semiMinor, inclination, longitudeOfAscending } = orbitParams
+    const x = Math.cos(angle) * semiMajor
+    const z = Math.sin(angle) * semiMinor
+    const cosInc = Math.cos(inclination)
+    const sinInc = Math.sin(inclination)
+    const cosLon = Math.cos(longitudeOfAscending)
+    const sinLon = Math.sin(longitudeOfAscending)
+    meshRef.current.position.x = x * cosLon - z * sinLon * cosInc
+    meshRef.current.position.y = z * sinInc
+    meshRef.current.position.z = x * sinLon + z * cosLon * cosInc
   })
 
   return (
     <>
-      <OrbitRing radius={scaledOrbit} />
+      <OrbitRing orbit={orbitParams} />
       <mesh ref={meshRef}>
         <sphereGeometry args={[scaledRadius, 24, 24]} />
         <meshStandardMaterial
