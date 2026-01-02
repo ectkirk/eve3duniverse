@@ -13,11 +13,11 @@ interface CameraControllerProps {
 }
 
 const ORBIT_CONFIG = {
-  minDistance: 0.15,
+  minDistance: 0.2,
   maxDistance: 50,
-  initialDistance: 0.4,
+  lockDistance: 0.5,
   zoomSpeed: 0.1,
-  transitionSpeed: 4,
+  transitionSpeed: 3,
 }
 
 export function CameraController({ orbitTarget }: CameraControllerProps) {
@@ -31,7 +31,7 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
   const orbitState = useRef({
     theta: 0,
     phi: Math.PI / 2,
-    distance: ORBIT_CONFIG.initialDistance,
+    distance: ORBIT_CONFIG.lockDistance,
     transitioning: false,
   })
 
@@ -128,17 +128,17 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
 
   useEffect(() => {
     if (orbitTarget) {
-      const dir = new THREE.Vector3()
-      camera.getWorldDirection(dir)
-      orbitState.current.theta = Math.atan2(dir.x, dir.z)
-      orbitState.current.phi = Math.acos(Math.max(-1, Math.min(1, -dir.y)))
-      orbitState.current.distance = camera.position.distanceTo(orbitTarget.position)
-      orbitState.current.distance = Math.max(
-        ORBIT_CONFIG.minDistance,
-        Math.min(ORBIT_CONFIG.maxDistance, orbitState.current.distance)
-      )
+      const offset = camera.position.clone().sub(orbitTarget.position)
+      orbitState.current.theta = Math.atan2(offset.x, offset.z)
+      orbitState.current.phi = Math.acos(Math.max(-1, Math.min(1, offset.y / offset.length())))
+      orbitState.current.distance = ORBIT_CONFIG.lockDistance
       orbitState.current.transitioning = true
       velocity.current.set(0, 0, 0)
+      camera.near = 0.01
+      ;(camera as THREE.PerspectiveCamera).updateProjectionMatrix()
+    } else {
+      camera.near = CAMERA_DEFAULTS.minZ
+      ;(camera as THREE.PerspectiveCamera).updateProjectionMatrix()
     }
   }, [orbitTarget, camera])
 
