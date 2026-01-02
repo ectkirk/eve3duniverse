@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { CAMERA_DEFAULTS } from '../constants'
 
 interface OrbitTarget {
-  position: THREE.Vector3
+  getPosition: () => THREE.Vector3
   onExit: () => void
 }
 
@@ -13,7 +13,7 @@ interface CameraControllerProps {
 }
 
 const ORBIT_CONFIG = {
-  minDistance: 0.2,
+  minDistance: 0.005,
   maxDistance: 50,
   lockDistance: 0.5,
   zoomSpeed: 0.1,
@@ -128,7 +128,8 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
 
   useEffect(() => {
     if (orbitTarget) {
-      const offset = camera.position.clone().sub(orbitTarget.position)
+      const targetPos = orbitTarget.getPosition()
+      const offset = camera.position.clone().sub(targetPos)
       orbitState.current.theta = Math.atan2(offset.x, offset.z)
       orbitState.current.phi = Math.acos(Math.max(-1, Math.min(1, offset.y / offset.length())))
       orbitState.current.distance = ORBIT_CONFIG.lockDistance
@@ -144,11 +145,12 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
 
   useFrame((_, delta) => {
     if (isOrbiting && orbitTarget) {
+      const orbitCenter = orbitTarget.getPosition()
       const { theta, phi, distance } = orbitState.current
       const targetPos = new THREE.Vector3(
-        orbitTarget.position.x + distance * Math.sin(phi) * Math.sin(theta),
-        orbitTarget.position.y + distance * Math.cos(phi),
-        orbitTarget.position.z + distance * Math.sin(phi) * Math.cos(theta)
+        orbitCenter.x + distance * Math.sin(phi) * Math.sin(theta),
+        orbitCenter.y + distance * Math.cos(phi),
+        orbitCenter.z + distance * Math.sin(phi) * Math.cos(theta)
       )
 
       const lerpFactor = orbitState.current.transitioning
@@ -156,7 +158,13 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
         : 1
 
       camera.position.lerp(targetPos, lerpFactor)
-      camera.lookAt(orbitTarget.position)
+      camera.lookAt(orbitCenter)
+
+      const nearPlane = Math.max(0.0001, distance * 0.01)
+      if (Math.abs(camera.near - nearPlane) > 0.0001) {
+        camera.near = nearPlane
+        ;(camera as THREE.PerspectiveCamera).updateProjectionMatrix()
+      }
 
       if (orbitState.current.transitioning && camera.position.distanceTo(targetPos) < 0.01) {
         orbitState.current.transitioning = false

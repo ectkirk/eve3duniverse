@@ -88,3 +88,33 @@ export interface UniverseData {
   systems: Record<string, SolarSystem>
   stargates: Record<string, Stargate>
 }
+
+export interface StarTextureSet {
+  ramp: string
+  corona: string
+}
+
+export function getStarTextures(spectralClass: string): StarTextureSet {
+  const letter = spectralClass.charAt(0).toUpperCase()
+  switch (letter) {
+    case 'O':
+    case 'B':
+      return { ramp: 'sunramp_blue_01a', corona: 'sunrampcorona_blue_01a' }
+    case 'A':
+      return { ramp: 'sunramp_white_01a', corona: 'sunrampcorona_white_01a' }
+    case 'F':
+      return { ramp: 'sunramp_white_01b', corona: 'sunrampcorona_white_01b' }
+    case 'G':
+      return { ramp: 'sunramp_yellow_01a', corona: 'sunrampcorona_yellow_01a' }
+    case 'K':
+      return { ramp: 'sunramp_orange_01a', corona: 'sunrampcorona_orange_01a' }
+    case 'M':
+      return { ramp: 'sunramp_red_01a', corona: 'sunrampcorona_red_01a' }
+    case 'W':
+      return { ramp: 'sunramp_blue_01c', corona: 'sunrampcorona_blue_01c' }
+    case 'D':
+      return { ramp: 'sunramp_white_01a', corona: 'sunrampcorona_white_01a' }
+    default:
+      return { ramp: 'sunramp_yellow_01a', corona: 'sunrampcorona_yellow_01a' }
+  }
+}

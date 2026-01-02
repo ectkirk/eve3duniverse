@@ -35,8 +35,9 @@ function regionColor(x: number, y: number, z: number): string {
   return hslToHex(hue, sat, lit)
 }
 
-function ccpRound(sec: number): number {
-  if (sec >= 0 && sec <= 0.05) return Math.ceil(sec * 10) / 10
+export function ccpRound(sec: number): number {
+  if (sec < 0) return 0
+  if (sec <= 0.05) return Math.ceil(sec * 10) / 10
   return Math.round(sec * 10) / 10
 }
 
