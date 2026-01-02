@@ -68,6 +68,7 @@ async function buildUniverseData() {
       radius: planet.radius,
       orbitRadius: planet.statistics?.orbitRadius ?? 0,
       orbitPeriod: planet.statistics?.orbitPeriod ?? 0,
+      temperature: planet.statistics?.temperature ?? 0,
     })
   }
 

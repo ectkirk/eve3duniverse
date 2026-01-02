@@ -69,6 +69,9 @@ function getPlanetAppearance(typeId: number): { color: THREE.Color; emissive?: T
     case 2015: return { color: new THREE.Color(0.3, 0.1, 0.05), emissive: new THREE.Color(1, 0.3, 0.1) }
     case 2016: return { color: new THREE.Color(0.5, 0.45, 0.4) }
     case 2017: return { color: new THREE.Color(0.3, 0.25, 0.4) }
+    case 2063: return { color: new THREE.Color(0.4, 0.1, 0.5), emissive: new THREE.Color(0.8, 0.2, 1.0) }
+    case 30889: return { color: new THREE.Color(0.35, 0.3, 0.25) }
+    case 73911: return { color: new THREE.Color(0.3, 0.15, 0.1), emissive: new THREE.Color(0.6, 0.2, 0.1) }
     default: return { color: new THREE.Color(0.5, 0.5, 0.5) }
   }
 }
@@ -223,9 +226,15 @@ function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: nu
 
   const appearance = useMemo(() => getPlanetAppearance(planet.typeId), [planet.typeId])
 
+  const emissiveIntensity = useMemo(() => {
+    if (!appearance.emissive) return 0
+    const tempFactor = Math.max(0, (planet.temperature - 400) / 1500)
+    return Math.min(1.5, 0.3 + tempFactor)
+  }, [appearance.emissive, planet.temperature])
+
   useFrame(({ clock }) => {
     if (!meshRef.current) return
-    const period = Math.max(5, planet.orbitPeriod * 1e-7)
+    const period = Math.max(30, planet.orbitPeriod * 1e-6)
     const angle = initialAngle + (clock.elapsedTime / period) * Math.PI * 2
     meshRef.current.position.x = Math.cos(angle) * scaledOrbit
     meshRef.current.position.z = Math.sin(angle) * scaledOrbit
@@ -239,7 +248,7 @@ function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: nu
         <meshStandardMaterial
           color={appearance.color}
           emissive={appearance.emissive ?? new THREE.Color(0, 0, 0)}
-          emissiveIntensity={appearance.emissive ? 0.5 : 0}
+          emissiveIntensity={emissiveIntensity}
           roughness={0.8}
           metalness={0.1}
         />

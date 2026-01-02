@@ -22,6 +22,7 @@ export interface Planet {
   radius: number
   orbitRadius: number
   orbitPeriod: number
+  temperature: number
 }
 
 export interface Region {
