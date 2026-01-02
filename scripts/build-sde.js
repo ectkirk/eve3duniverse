@@ -123,18 +123,18 @@ async function buildUniverseData() {
     }
   }
 
-  const stargates = []
-  const seenConnections = new Set()
+  const stargates = {}
   for (const sg of rawStargates) {
-    const from = sg.solarSystemID
-    const to = sg.destination?.solarSystemID
-    if (!from || !to) continue
+    if (!sg.solarSystemID || !sg.destination?.solarSystemID) continue
 
-    const key = from < to ? `${from}-${to}` : `${to}-${from}`
-    if (seenConnections.has(key)) continue
-    seenConnections.add(key)
-
-    stargates.push({ fromSystemId: from, toSystemId: to })
+    stargates[sg._key] = {
+      id: sg._key,
+      systemId: sg.solarSystemID,
+      destinationSystemId: sg.destination.solarSystemID,
+      destinationStargateId: sg.destination.stargateID,
+      typeId: sg.typeID,
+      position: sg.position,
+    }
   }
 
   const universeData = { regions, constellations, systems, stargates }
@@ -149,7 +149,7 @@ async function buildUniverseData() {
   console.log(`  Regions: ${Object.keys(regions).length}`)
   console.log(`  Constellations: ${Object.keys(constellations).length}`)
   console.log(`  Systems: ${Object.keys(systems).length}`)
-  console.log(`  Stargates: ${stargates.length}`)
+  console.log(`  Stargates: ${Object.keys(stargates).length}`)
 }
 
 buildUniverseData().catch((err) => {

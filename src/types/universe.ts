@@ -52,13 +52,39 @@ export interface SolarSystem {
   planets: Planet[]
 }
 
+export interface Stargate {
+  id: number
+  systemId: number
+  destinationSystemId: number
+  destinationStargateId: number
+  typeId: number
+  position: Position
+}
+
+export const STARGATE_MODELS: Record<number, string> = {
+  16: 'csg',      // Caldari System
+  17: 'asmg',     // Amarr Constellation
+  3873: 'cbg',    // Caldari Border
+  3874: 'gsmg',   // Gallente Constellation
+  3875: 'gsg',    // Gallente System
+  3876: 'gbg',    // Gallente Border
+  3877: 'msmg',   // Minmatar Constellation
+  12292: 'ssg',   // Smuggler Route
+  29624: 'asg',   // Amarr System
+  29625: 'abg',   // Amarr Border
+  29626: 'ahg',   // Amarr Region
+  29627: 'csmg',  // Caldari Constellation
+  29629: 'chg',   // Caldari Region
+  29632: 'ghg',   // Gallente Region
+  29633: 'msg',   // Minmatar System
+  29634: 'mbg',   // Minmatar Border
+  29635: 'mhg',   // Minmatar Region
+  56317: 'tgg2',  // Pochven Conduit
+}
+
 export interface UniverseData {
   regions: Record<string, Region>
   constellations: Record<string, Constellation>
   systems: Record<string, SolarSystem>
-}
-
-export interface Stargate {
-  fromSystemId: number
-  toSystemId: number
+  stargates: Record<string, Stargate>
 }

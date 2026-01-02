@@ -1,12 +1,15 @@
-import { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useRef, useMemo, Suspense } from 'react'
+import { useFrame, useLoader } from '@react-three/fiber'
 import { Billboard } from '@react-three/drei'
 import * as THREE from 'three'
-import type { SolarSystem, Planet, Star } from '../types/universe'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
+import { STARGATE_MODELS } from '../types/universe'
 
 interface FocusedStarProps {
   system: SolarSystem
   position: THREE.Vector3
+  stargates: Stargate[]
 }
 
 const SUN_RADIUS = 696340000
@@ -60,20 +63,48 @@ function getStarProperties(star: Star | null) {
   }
 }
 
-function getPlanetAppearance(typeId: number): { color: THREE.Color; emissive?: THREE.Color } {
+type PlanetCategory = 'gasgiant' | 'terrestrial' | 'ice' | 'lava' | 'oceanic' | 'barren' | 'storm' | 'plasma' | 'shattered'
+
+interface PlanetTextureConfig {
+  category: PlanetCategory
+  diffuse?: string
+  detail?: string
+  gradient: string
+  emissive?: string
+  hasAtmosphere: boolean
+  hasClouds: boolean
+}
+
+function getPlanetConfig(typeId: number): PlanetTextureConfig {
   switch (typeId) {
-    case 11: return { color: new THREE.Color(0.2, 0.5, 0.3) }
-    case 12: return { color: new THREE.Color(0.85, 0.92, 1.0) }
-    case 13: return { color: new THREE.Color(0.8, 0.7, 0.5) }
-    case 2014: return { color: new THREE.Color(0.1, 0.3, 0.7) }
-    case 2015: return { color: new THREE.Color(0.3, 0.1, 0.05), emissive: new THREE.Color(1, 0.3, 0.1) }
-    case 2016: return { color: new THREE.Color(0.5, 0.45, 0.4) }
-    case 2017: return { color: new THREE.Color(0.3, 0.25, 0.4) }
-    case 2063: return { color: new THREE.Color(0.4, 0.1, 0.5), emissive: new THREE.Color(0.8, 0.2, 1.0) }
-    case 30889: return { color: new THREE.Color(0.35, 0.3, 0.25) }
-    case 73911: return { color: new THREE.Color(0.3, 0.15, 0.1), emissive: new THREE.Color(0.6, 0.2, 0.1) }
-    default: return { color: new THREE.Color(0.5, 0.5, 0.5) }
+    case 11: return { category: 'terrestrial', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_temperate', hasAtmosphere: true, hasClouds: true }
+    case 12: return { category: 'ice', diffuse: 'icedetail01_p', gradient: 'gradient_ice', hasAtmosphere: true, hasClouds: false }
+    case 13: return { category: 'gasgiant', diffuse: 'gasgiant01_d', detail: 'gasgiantdetail01_m', gradient: 'gradient_gasgiant', hasAtmosphere: true, hasClouds: false }
+    case 2014: return { category: 'oceanic', diffuse: 'terrestrialdetail02_p', gradient: 'gradient_ocean', hasAtmosphere: true, hasClouds: true }
+    case 2015: return { category: 'lava', diffuse: 'lavamagma01_p', gradient: 'gradient_lava', emissive: 'lavamagma02_p', hasAtmosphere: false, hasClouds: false }
+    case 2016: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
+    case 2017: return { category: 'storm', diffuse: 'clouddense01_m', gradient: 'gradient_thunderstorm', hasAtmosphere: true, hasClouds: true }
+    case 2063: return { category: 'plasma', diffuse: 'terrestrialdetail02_p', gradient: 'gradient_plasma', hasAtmosphere: true, hasClouds: false }
+    case 30889: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
+    case 73911: return { category: 'lava', diffuse: 'lavamagma02_p', gradient: 'gradient_lava', emissive: 'lavamagma01_p', hasAtmosphere: false, hasClouds: false }
+    default: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
   }
+}
+
+function getTexturePath(category: PlanetCategory, filename: string): string {
+  const categoryMap: Record<string, string> = {
+    gasgiant: 'gasgiant',
+    terrestrial: 'terrestrial',
+    ice: 'ice',
+    lava: 'lava',
+    oceanic: 'terrestrial',
+    barren: 'terrestrial',
+    storm: 'terrestrial',
+    plasma: 'terrestrial',
+    shattered: 'shattered',
+  }
+  if (filename.startsWith('gradient_')) return `/models/planets/aurora/${filename}.png`
+  return `/models/planets/${categoryMap[category]}/${filename}.png`
 }
 
 const starVertexShader = `
@@ -195,6 +226,89 @@ const glowFragmentShader = `
   }
 `
 
+const planetVertexShader = `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const planetFragmentShader = `
+  uniform sampler2D uDiffuse;
+  uniform sampler2D uGradient;
+  uniform vec3 uAtmosphereColor;
+  uniform float uAtmosphereIntensity;
+  uniform float uEmissiveIntensity;
+  uniform float uTime;
+
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+
+  void main() {
+    vec3 viewDir = normalize(-vPosition);
+    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 3.0);
+
+    // Sample diffuse texture with slight UV animation for gas giants
+    vec2 uv = vUv;
+    vec4 diffuse = texture2D(uDiffuse, uv);
+
+    // Sample gradient for color tinting
+    float gradientSample = dot(vNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+    vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
+
+    // Combine diffuse with gradient tint
+    vec3 baseColor = diffuse.rgb * gradientColor * 1.5;
+
+    // Atmosphere glow at edges
+    vec3 atmosphere = uAtmosphereColor * fresnel * uAtmosphereIntensity;
+
+    // Emissive for lava planets
+    vec3 emissive = diffuse.rgb * uEmissiveIntensity * (0.8 + 0.2 * sin(uTime * 2.0));
+
+    // Basic lighting
+    vec3 lightDir = normalize(vec3(1.0, 0.5, 0.5));
+    float NdotL = max(dot(vNormal, lightDir), 0.0);
+    float shadow = 0.3 + 0.7 * NdotL;
+
+    vec3 finalColor = baseColor * shadow + atmosphere + emissive;
+
+    gl_FragColor = vec4(finalColor, 1.0);
+  }
+`
+
+const atmosphereVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const atmosphereFragmentShader = `
+  uniform vec3 uColor;
+  uniform float uIntensity;
+
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+
+  void main() {
+    vec3 viewDir = normalize(-vPosition);
+    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 2.5);
+    float alpha = fresnel * uIntensity;
+    gl_FragColor = vec4(uColor, alpha * 0.6);
+  }
+`
+
 interface OrbitParams {
   semiMajor: number
   semiMinor: number
@@ -232,8 +346,97 @@ function OrbitRing({ orbit }: { orbit: OrbitParams }) {
   return <primitive ref={lineRef} object={new THREE.Line(geometry, material)} />
 }
 
+const ATMOSPHERE_COLORS: Record<PlanetCategory, THREE.Color> = {
+  gasgiant: new THREE.Color(0.8, 0.7, 0.5),
+  terrestrial: new THREE.Color(0.5, 0.7, 1.0),
+  ice: new THREE.Color(0.7, 0.9, 1.0),
+  lava: new THREE.Color(1.0, 0.3, 0.1),
+  oceanic: new THREE.Color(0.3, 0.6, 1.0),
+  barren: new THREE.Color(0.6, 0.5, 0.4),
+  storm: new THREE.Color(0.5, 0.4, 0.7),
+  plasma: new THREE.Color(0.8, 0.3, 1.0),
+  shattered: new THREE.Color(0.5, 0.5, 0.5),
+}
+
+function TexturedPlanetMesh({ config, scaledRadius }: { config: PlanetTextureConfig; scaledRadius: number }) {
+  const diffusePath = config.diffuse ? getTexturePath(config.category, config.diffuse) : null
+  const gradientPath = getTexturePath(config.category, config.gradient)
+
+  const defaultTexture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 2
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#888888'
+    ctx.fillRect(0, 0, 2, 2)
+    return new THREE.CanvasTexture(canvas)
+  }, [])
+
+  const diffuse = useLoader(
+    THREE.TextureLoader,
+    diffusePath || '/models/planets/aurora/gradient_barren.png'
+  )
+  const gradient = useLoader(THREE.TextureLoader, gradientPath)
+
+  const atmosphereColor = ATMOSPHERE_COLORS[config.category]
+  const isLava = config.category === 'lava'
+  const isPlasma = config.category === 'plasma'
+
+  const material = useMemo(() => {
+    const tex = diffusePath ? diffuse : defaultTexture
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+
+    return new THREE.ShaderMaterial({
+      vertexShader: planetVertexShader,
+      fragmentShader: planetFragmentShader,
+      uniforms: {
+        uDiffuse: { value: tex },
+        uGradient: { value: gradient },
+        uAtmosphereColor: { value: atmosphereColor },
+        uAtmosphereIntensity: { value: config.hasAtmosphere ? 0.4 : 0.0 },
+        uEmissiveIntensity: { value: isLava || isPlasma ? 0.8 : 0.0 },
+        uTime: { value: 0 },
+      },
+    })
+  }, [diffuse, gradient, atmosphereColor, config.hasAtmosphere, isLava, isPlasma, diffusePath, defaultTexture])
+
+  const atmosphereMaterial = useMemo(() => {
+    if (!config.hasAtmosphere) return null
+    return new THREE.ShaderMaterial({
+      vertexShader: atmosphereVertexShader,
+      fragmentShader: atmosphereFragmentShader,
+      uniforms: {
+        uColor: { value: atmosphereColor },
+        uIntensity: { value: 1.0 },
+      },
+      transparent: true,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  }, [config.hasAtmosphere, atmosphereColor])
+
+  useFrame(({ clock }) => {
+    if (material.uniforms.uTime) {
+      material.uniforms.uTime.value = clock.elapsedTime
+    }
+  })
+
+  return (
+    <>
+      <mesh material={material}>
+        <sphereGeometry args={[scaledRadius, 32, 32]} />
+      </mesh>
+      {atmosphereMaterial && (
+        <mesh material={atmosphereMaterial}>
+          <sphereGeometry args={[scaledRadius * 1.05, 32, 32]} />
+        </mesh>
+      )}
+    </>
+  )
+}
+
 function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: number }) {
-  const meshRef = useRef<THREE.Mesh>(null)
+  const groupRef = useRef<THREE.Group>(null)
 
   const planetRadiusRatio = planet.radius / starRadius
   const scaledRadius = Math.max(0.003, Math.min(0.03, planetRadiusRatio * SCENE_STAR_RADIUS * 2))
@@ -253,16 +456,10 @@ function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: nu
     return Math.atan2(-pos.x, pos.z)
   }, [planet.position])
 
-  const appearance = useMemo(() => getPlanetAppearance(planet.typeId), [planet.typeId])
-
-  const emissiveIntensity = useMemo(() => {
-    if (!appearance.emissive) return 0
-    const tempFactor = Math.max(0, (planet.temperature - 400) / 1500)
-    return Math.min(1.5, 0.3 + tempFactor)
-  }, [appearance.emissive, planet.temperature])
+  const config = useMemo(() => getPlanetConfig(planet.typeId), [planet.typeId])
 
   useFrame(({ clock }) => {
-    if (!meshRef.current) return
+    if (!groupRef.current) return
     const period = Math.max(30, planet.orbitPeriod * 1e-6)
     const angle = initialAngle + (clock.elapsedTime / period) * Math.PI * 2
     const { semiMajor, semiMinor, inclination, longitudeOfAscending } = orbitParams
@@ -272,29 +469,84 @@ function OrbitingPlanet({ planet, starRadius }: { planet: Planet; starRadius: nu
     const sinInc = Math.sin(inclination)
     const cosLon = Math.cos(longitudeOfAscending)
     const sinLon = Math.sin(longitudeOfAscending)
-    meshRef.current.position.x = x * cosLon - z * sinLon * cosInc
-    meshRef.current.position.y = z * sinInc
-    meshRef.current.position.z = x * sinLon + z * cosLon * cosInc
+    groupRef.current.position.x = x * cosLon - z * sinLon * cosInc
+    groupRef.current.position.y = z * sinInc
+    groupRef.current.position.z = x * sinLon + z * cosLon * cosInc
   })
 
   return (
     <>
       <OrbitRing orbit={orbitParams} />
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[scaledRadius, 24, 24]} />
-        <meshStandardMaterial
-          color={appearance.color}
-          emissive={appearance.emissive ?? new THREE.Color(0, 0, 0)}
-          emissiveIntensity={emissiveIntensity}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
+      <group ref={groupRef}>
+        <Suspense fallback={
+          <mesh>
+            <sphereGeometry args={[scaledRadius, 16, 16]} />
+            <meshBasicMaterial color={0x444444} />
+          </mesh>
+        }>
+          <TexturedPlanetMesh config={config} scaledRadius={scaledRadius} />
+        </Suspense>
+      </group>
     </>
   )
 }
 
-export function FocusedStar({ system, position }: FocusedStarProps) {
+const DEFAULT_STARGATE_MODEL = 'asg'
+const STARGATE_MODEL_SCALE = 0.00002
+
+function StargateModel({ stargate }: { stargate: Stargate }) {
+  const modelCode = STARGATE_MODELS[stargate.typeId] || DEFAULT_STARGATE_MODEL
+  const basePath = `/models/stargates/${modelCode}`
+
+  const obj = useLoader(OBJLoader, `${basePath}.obj`)
+  const [albedo, normal, roughness, metalness, glow] = useLoader(THREE.TextureLoader, [
+    `${basePath}_albedo.png`,
+    `${basePath}_normal.png`,
+    `${basePath}_roughness.png`,
+    `${basePath}_metalness.png`,
+    `${basePath}_glow.png`,
+  ])
+
+  const cloned = useMemo(() => {
+    const c = obj.clone()
+    c.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.computeVertexNormals()
+        child.material = new THREE.MeshStandardMaterial({
+          map: albedo,
+          normalMap: normal,
+          roughnessMap: roughness,
+          metalnessMap: metalness,
+          emissiveMap: glow,
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.5,
+          side: THREE.DoubleSide,
+          metalness: 1.0,
+          roughness: 1.0,
+        })
+      }
+    })
+    return c
+  }, [obj, albedo, normal, roughness, metalness, glow])
+
+  const scenePosition = useMemo(() => {
+    return new THREE.Vector3(
+      stargate.position.x * ORBIT_VISUAL_SCALE,
+      stargate.position.y * ORBIT_VISUAL_SCALE,
+      stargate.position.z * ORBIT_VISUAL_SCALE
+    )
+  }, [stargate.position])
+
+  return (
+    <primitive
+      object={cloned}
+      position={scenePosition}
+      scale={[STARGATE_MODEL_SCALE, STARGATE_MODEL_SCALE, STARGATE_MODEL_SCALE]}
+    />
+  )
+}
+
+export function FocusedStar({ system, position, stargates }: FocusedStarProps) {
   const starProps = useMemo(() => getStarProperties(system.star), [system.star])
 
   const starColor = useMemo(
@@ -369,6 +621,12 @@ export function FocusedStar({ system, position }: FocusedStarProps) {
       {system.planets.slice(0, 8).map((planet) => (
         <OrbitingPlanet key={planet.id} planet={planet} starRadius={starProps.radius} />
       ))}
+
+      <Suspense fallback={null}>
+        {stargates.map((sg) => (
+          <StargateModel key={sg.id} stargate={sg} />
+        ))}
+      </Suspense>
     </group>
   )
 }

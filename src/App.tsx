@@ -10,7 +10,7 @@ import { FocusedStar } from './components/FocusedStar'
 import * as styles from './styles'
 
 export function App() {
-  const { systems, regions, constellations, loading, error } = useUniverseData()
+  const { systems, regions, constellations, stargatesBySystem, loading, error } = useUniverseData()
   const [focusInfo, setFocusInfo] = useState<FocusInfo>({ state: 'normal', target: null, dwellProgress: 0 })
   const [showEscapeMenu, setShowEscapeMenu] = useState(false)
   const [colorMode, setColorMode] = useState(0)
@@ -73,6 +73,7 @@ export function App() {
           <FocusedStar
             system={focusInfo.target.system}
             position={focusInfo.target.scenePosition}
+            stargates={stargatesBySystem.get(focusInfo.target.system.id) ?? []}
           />
         )}
         <PostProcessing />

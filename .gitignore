@@ -9,3 +9,6 @@ release/
 CLAUDE.md
 .tmp/
 sde.zip
+resfileindex.txt
+assets/stargates/**/*.gr2
+assets/stargates/**/*.dds
