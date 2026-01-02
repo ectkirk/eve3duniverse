@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "net.edencom.eve3duniverse",
-    "productName": "EVE 3D Universe",
+    "productName": "EVE3DUniverse",
     "copyright": "Copyright © 2026 EC Trade (edencom.net)",
     "directories": {
       "buildResources": "resources",
@@ -46,7 +46,6 @@
           ]
         }
       ],
-      "executableName": "EVE3DUniverse",
       "legalTrademarks": "EC Trade - edencom.net",
       "requestedExecutionLevel": "asInvoker"
     },
