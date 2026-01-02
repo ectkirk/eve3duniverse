@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useUniverseData } from './hooks/useUniverseData'
 import { Stars } from './components/Stars'
+import { RegionLabels } from './components/RegionLabels'
 import { CameraController } from './components/CameraController'
 import { PostProcessing } from './components/PostProcessing'
 import * as styles from './styles'
@@ -10,6 +11,7 @@ export function App() {
   const { systems, regions, loading, error } = useUniverseData()
   const [showEscapeMenu, setShowEscapeMenu] = useState(false)
   const [colorMode, setColorMode] = useState(0)
+  const [showLabels, setShowLabels] = useState(true)
 
   useEffect(() => {
     return window.electronAPI.onToggleEscapeMenu(() => {
@@ -23,6 +25,7 @@ export function App() {
       if (e.key === '1') setColorMode(0)
       else if (e.key === '2') setColorMode(1)
       else if (e.key === '3') setColorMode(2)
+      else if (e.key.toLowerCase() === 'l') setShowLabels((prev) => !prev)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -37,6 +40,7 @@ export function App() {
       >
         <CameraController />
         {systems.length > 0 && <Stars systems={systems} regions={regions} colorMode={colorMode} />}
+        {showLabels && <RegionLabels regions={regions} systems={systems} colorMode={colorMode} />}
         <PostProcessing />
       </Canvas>
 
@@ -58,7 +62,7 @@ export function App() {
           <div>Systems: {systems.length.toLocaleString()}</div>
           <div>Color: {['Star Type', 'Security', 'Region'][colorMode]}</div>
           <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
-            WASD: move | Mouse: look | 1/2/3: color | ESC: menu
+            WASD: move | Mouse: look | 1/2/3: color | L: labels | ESC: menu
           </div>
         </div>
       )}

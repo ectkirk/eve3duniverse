@@ -35,8 +35,13 @@ vec3 regionToRGB(vec3 pos) {
   return hslToRgb(abs(hue), clamp(sat, 0.6, 1.0), clamp(lit, 0.35, 0.6));
 }
 
+float ccpRound(float sec) {
+  if (sec >= 0.0 && sec <= 0.05) return ceil(sec * 10.0) / 10.0;
+  return floor(sec * 10.0 + 0.5) / 10.0;
+}
+
 vec3 securityToRGB(float sec) {
-  float rounded = floor(sec * 10.0 + 0.5) / 10.0;
+  float rounded = ccpRound(sec);
 
   if (rounded >= 0.5) {
     float intensity = (rounded - 0.5) / 0.5;
