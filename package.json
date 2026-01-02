@@ -46,6 +46,7 @@
           ]
         }
       ],
+      "executableName": "EVE3DUniverse",
       "legalTrademarks": "EC Trade - edencom.net",
       "requestedExecutionLevel": "asInvoker"
     },
@@ -58,7 +59,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "EVE3DUniverse-Setup-${version}.${ext}"
+      "artifactName": "EVE3DUniverse-Setup-${version}.${ext}",
+      "shortcutName": "EVE 3D Universe"
     },
     "publish": {
       "provider": "github",
