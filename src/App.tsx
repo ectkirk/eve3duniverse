@@ -30,12 +30,34 @@ export function App() {
   const orbitTarget = useMemo(() => {
     if (focusInfo.state === 'locked' && focusInfo.target) {
       const systemPos = focusInfo.target.scenePosition
+      const system = focusInfo.target.system
+      const star = system.star
+      const starRadius = star ? Math.max(0.04, Math.min(0.25, (star.radius / 696340000) * 0.08)) : 0.08
+
       return {
         getPosition: () => {
           if (focusedBodyId && bodyPositionsRef.current[focusedBodyId]) {
             return systemPos.clone().add(bodyPositionsRef.current[focusedBodyId])
           }
           return systemPos
+        },
+        getRadius: () => {
+          if (!focusedBodyId || focusedBodyId === 'star') {
+            return starRadius
+          }
+          if (focusedBodyId.startsWith('planet-')) {
+            const planetId = parseInt(focusedBodyId.replace('planet-', ''), 10)
+            const planet = system.planets.find((p) => p.id === planetId)
+            if (planet && star) {
+              const planetRadiusRatio = planet.radius / star.radius
+              return Math.max(0.003, Math.min(0.03, planetRadiusRatio * 0.08 * 2))
+            }
+            return 0.01
+          }
+          if (focusedBodyId.startsWith('stargate-')) {
+            return 0.005
+          }
+          return 0.01
         },
         onExit: handleOrbitExit,
       }

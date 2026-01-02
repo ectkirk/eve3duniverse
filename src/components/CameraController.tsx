@@ -5,6 +5,7 @@ import { CAMERA_DEFAULTS } from '../constants'
 
 interface OrbitTarget {
   getPosition: () => THREE.Vector3
+  getRadius: () => number
   onExit: () => void
 }
 
@@ -15,7 +16,7 @@ interface CameraControllerProps {
 const ORBIT_CONFIG = {
   minDistance: 0.005,
   maxDistance: 50,
-  lockDistance: 0.5,
+  lockDistanceMultiplier: 4,
   zoomSpeed: 0.1,
   transitionSpeed: 3,
 }
@@ -31,7 +32,7 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
   const orbitState = useRef({
     theta: 0,
     phi: Math.PI / 2,
-    distance: ORBIT_CONFIG.lockDistance,
+    distance: 0.5,
     transitioning: false,
   })
 
@@ -132,7 +133,8 @@ export function CameraController({ orbitTarget }: CameraControllerProps) {
       const offset = camera.position.clone().sub(targetPos)
       orbitState.current.theta = Math.atan2(offset.x, offset.z)
       orbitState.current.phi = Math.acos(Math.max(-1, Math.min(1, offset.y / offset.length())))
-      orbitState.current.distance = ORBIT_CONFIG.lockDistance
+      const radius = orbitTarget.getRadius()
+      orbitState.current.distance = Math.max(ORBIT_CONFIG.minDistance, radius * ORBIT_CONFIG.lockDistanceMultiplier)
       orbitState.current.transitioning = true
       velocity.current.set(0, 0, 0)
       camera.near = 0.01
