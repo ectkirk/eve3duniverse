@@ -16,6 +16,7 @@ const PLANET_TEXTURES = {
     diffuse: ['gasgiant01_d.dds', 'gasgiant02_d.dds', 'gasgiant03_d.dds'],
     detail: ['gasgiantdetail01_m.dds', 'gasgiantdetail02_m.dds'],
     rings: ['gasgiantring01_d.dds', 'gasgiantring02_d.dds', 'gasgiantring03_d.dds'],
+    mixer: ['gasgiant_mixer_tex.dds'],
   },
   ice: {
     height: ['ice01_h.dds', 'ice02_h.dds'],
@@ -56,14 +57,27 @@ const PLANET_TEXTURES = {
     ],
   },
   preset: {
-    scatter: [
+    scatterHue: [
       'terrestrialscatterhue01_d.dds',
       'terrestrialscatterhue02_d.dds',
       'icescatterhue01_d.dds',
+      'icescatterhue02_d.dds',
       'lavascatterhue01_d.dds',
+      'lavascatterhue02_d.dds',
       'plasmascatterhue01_d.dds',
+      'plasmascatterhue02_d.dds',
       'sandstormscatterhue01_d.dds',
     ],
+    scatterLight: [
+      'terrestrialscatterlight01_d.dds',
+      'icescatterlight01_d.dds',
+      'lavascatterlight01_d.dds',
+      'plasmascatterlight01_d.dds',
+      'sandstormscatterlight01_d.dds',
+    ],
+  },
+  worldobject: {
+    masks: ['gradient01_m.dds'],
   },
 }
 
@@ -136,8 +150,10 @@ async function downloadPlanetAssets() {
           resPath = `res:/dx9/model/worldobject/planet/aurora/${filename}`
         } else if (planetType === 'preset') {
           resPath = `res:/dx9/model/worldobject/planet/preset/${filename}`
-        } else if (planetType === 'shattered') {
+        } else if (planetType === 'shattered' || planetType === 'worldobject') {
           resPath = `res:/dx9/model/worldobject/planet/${filename}`
+        } else if (planetType === 'gasgiant' && filename === 'gasgiant_mixer_tex.dds') {
+          resPath = `res:/dx9/model/worldobject/planet/gasgiant/${filename}`
         } else {
           resPath = `res:/dx9/model/worldobject/planet/${planetType}/${filename}`
         }

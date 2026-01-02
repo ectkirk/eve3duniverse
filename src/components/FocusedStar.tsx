@@ -5,6 +5,13 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
 import { STARGATE_MODELS, getStarTextures } from '../types/universe'
+import { PlanetMesh, getPlanetConfig, type OrbitParams } from './planets'
+import {
+  starVertexShader,
+  starFragmentShader,
+  glowVertexShader,
+  glowFragmentShader,
+} from '../shaders/planetShaders'
 
 interface FocusedStarProps {
   system: SolarSystem
@@ -17,224 +24,6 @@ interface FocusedStarProps {
 
 const SCENE_BASE_RADIUS = 0.08
 const ORBIT_VISUAL_SCALE = 3e-12
-
-type PlanetCategory = 'gasgiant' | 'terrestrial' | 'ice' | 'lava' | 'oceanic' | 'barren' | 'storm' | 'plasma' | 'shattered'
-
-interface PlanetTextureConfig {
-  category: PlanetCategory
-  diffuse?: string
-  detail?: string
-  gradient: string
-  emissive?: string
-  hasAtmosphere: boolean
-  hasClouds: boolean
-}
-
-function getPlanetConfig(typeId: number): PlanetTextureConfig {
-  switch (typeId) {
-    case 11: return { category: 'terrestrial', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_temperate', hasAtmosphere: true, hasClouds: true }
-    case 12: return { category: 'ice', diffuse: 'icedetail01_p', gradient: 'gradient_ice', hasAtmosphere: true, hasClouds: false }
-    case 13: return { category: 'gasgiant', diffuse: 'gasgiant01_d', detail: 'gasgiantdetail01_m', gradient: 'gradient_gasgiant', hasAtmosphere: true, hasClouds: false }
-    case 2014: return { category: 'oceanic', diffuse: 'terrestrialdetail02_p', gradient: 'gradient_ocean', hasAtmosphere: true, hasClouds: true }
-    case 2015: return { category: 'lava', diffuse: 'lavamagma01_p', gradient: 'gradient_lava', emissive: 'lavamagma02_p', hasAtmosphere: false, hasClouds: false }
-    case 2016: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
-    case 2017: return { category: 'storm', diffuse: 'clouddense01_m', gradient: 'gradient_thunderstorm', hasAtmosphere: true, hasClouds: true }
-    case 2063: return { category: 'plasma', diffuse: 'terrestrialdetail02_p', gradient: 'gradient_plasma', hasAtmosphere: true, hasClouds: false }
-    case 30889: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
-    case 73911: return { category: 'lava', diffuse: 'lavamagma02_p', gradient: 'gradient_lava', emissive: 'lavamagma01_p', hasAtmosphere: false, hasClouds: false }
-    default: return { category: 'barren', diffuse: 'terrestrialdetail01_p', gradient: 'gradient_barren', hasAtmosphere: false, hasClouds: false }
-  }
-}
-
-function getTexturePath(category: PlanetCategory, filename: string): string {
-  const categoryMap: Record<string, string> = {
-    gasgiant: 'gasgiant',
-    terrestrial: 'terrestrial',
-    ice: 'ice',
-    lava: 'lava',
-    oceanic: 'terrestrial',
-    barren: 'terrestrial',
-    storm: 'terrestrial',
-    plasma: 'terrestrial',
-    shattered: 'shattered',
-  }
-  if (filename.startsWith('gradient_')) return `/models/planets/aurora/${filename}.png`
-  return `/models/planets/${categoryMap[category]}/${filename}.png`
-}
-
-const starVertexShader = `
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
-  varying vec2 vUv;
-
-  void main() {
-    vWorldNormal = normalize(mat3(modelMatrix) * normal);
-    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const starFragmentShader = `
-  uniform sampler2D uSurface;
-  uniform sampler2D uRamp;
-  uniform float uTime;
-  uniform float uLuminosity;
-
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
-  varying vec2 vUv;
-
-  void main() {
-    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    float NdotV = max(dot(vWorldNormal, viewDir), 0.0);
-
-    vec2 surfaceUv = vUv * 2.0 + vec2(uTime * 0.01, uTime * 0.005);
-    vec4 surfaceDetail = texture2D(uSurface, surfaceUv);
-
-    float rampCoord = NdotV * 0.8 + surfaceDetail.r * 0.2;
-    vec3 starColor = texture2D(uRamp, vec2(rampCoord, 0.5)).rgb;
-
-    float limbDarkening = 0.6 + 0.4 * NdotV;
-    vec3 color = starColor * limbDarkening * (1.0 + surfaceDetail.r * 0.3);
-
-    float brightnessMult = 1.0 + 0.3 * clamp(log(uLuminosity + 1.0), 0.0, 2.0);
-    color *= brightnessMult;
-
-    gl_FragColor = vec4(color, 1.0);
-  }
-`
-
-const glowVertexShader = `
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const glowFragmentShader = `
-  uniform sampler2D uCoronaRamp;
-  uniform float uLuminosity;
-  uniform float uTime;
-
-  varying vec2 vUv;
-
-  void main() {
-    vec2 center = vUv - 0.5;
-    float dist = length(center) * 2.0;
-
-    float rampCoord = 1.0 - smoothstep(0.0, 1.0, dist);
-    vec3 coronaColor = texture2D(uCoronaRamp, vec2(rampCoord, 0.5)).rgb;
-
-    float coreFalloff = 1.0 - smoothstep(0.0, 0.35, dist);
-    float glowFalloff = exp(-dist * 2.5) * 0.6;
-    float outerGlow = exp(-dist * 1.2) * 0.3;
-
-    float glow = coreFalloff + glowFalloff + outerGlow;
-    glow *= 1.0 - smoothstep(0.85, 1.0, dist);
-
-    float intensity = 0.6 + 0.3 * clamp(log(uLuminosity + 1.0), 0.0, 1.5);
-    float flicker = 1.0 + 0.015 * sin(uTime * 3.0);
-
-    vec3 color = coronaColor * intensity * flicker;
-
-    gl_FragColor = vec4(color, glow * intensity);
-  }
-`
-
-const planetVertexShader = `
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
-
-  void main() {
-    vUv = uv;
-    vNormal = normalize(normalMatrix * normal);
-    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * normal);
-    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const planetFragmentShader = `
-  uniform sampler2D uDiffuse;
-  uniform sampler2D uGradient;
-  uniform vec3 uAtmosphereColor;
-  uniform float uAtmosphereIntensity;
-  uniform float uEmissiveIntensity;
-  uniform float uTime;
-  uniform vec3 uStarPosition;
-  uniform vec3 uStarColor;
-
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
-
-  void main() {
-    vec3 viewDir = normalize(-vPosition);
-    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 3.0);
-
-    vec2 uv = vUv;
-    vec4 diffuse = texture2D(uDiffuse, uv);
-
-    float gradientSample = dot(vNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
-    vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
-
-    vec3 baseColor = diffuse.rgb * gradientColor * 1.5;
-
-    vec3 atmosphere = uAtmosphereColor * fresnel * uAtmosphereIntensity;
-
-    vec3 emissive = diffuse.rgb * uEmissiveIntensity * (0.8 + 0.2 * sin(uTime * 2.0));
-
-    vec3 lightDir = normalize(uStarPosition - vWorldPosition);
-    float NdotL = max(dot(normalize(vWorldNormal), lightDir), 0.0);
-    float shadow = 0.15 + 0.85 * NdotL;
-
-    vec3 litColor = baseColor * shadow * uStarColor;
-
-    gl_FragColor = vec4(litColor + atmosphere + emissive, 1.0);
-  }
-`
-
-const atmosphereVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const atmosphereFragmentShader = `
-  uniform vec3 uColor;
-  uniform float uIntensity;
-
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-
-  void main() {
-    vec3 viewDir = normalize(-vPosition);
-    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 2.5);
-    float alpha = fresnel * uIntensity;
-    gl_FragColor = vec4(uColor, alpha * 0.6);
-  }
-`
-
-interface OrbitParams {
-  semiMajor: number
-  semiMinor: number
-  inclination: number
-  longitudeOfAscending: number
-}
 
 function OrbitRing({ orbit }: { orbit: OrbitParams }) {
   const lineRef = useRef<THREE.Line>(null)
@@ -264,104 +53,6 @@ function OrbitRing({ orbit }: { orbit: OrbitParams }) {
   )
 
   return <primitive ref={lineRef} object={new THREE.Line(geometry, material)} />
-}
-
-const ATMOSPHERE_COLORS: Record<PlanetCategory, THREE.Color> = {
-  gasgiant: new THREE.Color(0.8, 0.7, 0.5),
-  terrestrial: new THREE.Color(0.5, 0.7, 1.0),
-  ice: new THREE.Color(0.7, 0.9, 1.0),
-  lava: new THREE.Color(1.0, 0.3, 0.1),
-  oceanic: new THREE.Color(0.3, 0.6, 1.0),
-  barren: new THREE.Color(0.6, 0.5, 0.4),
-  storm: new THREE.Color(0.5, 0.4, 0.7),
-  plasma: new THREE.Color(0.8, 0.3, 1.0),
-  shattered: new THREE.Color(0.5, 0.5, 0.5),
-}
-
-interface TexturedPlanetMeshProps {
-  config: PlanetTextureConfig
-  scaledRadius: number
-  starPosition: THREE.Vector3
-  starColor: THREE.Color
-}
-
-function TexturedPlanetMesh({ config, scaledRadius, starPosition, starColor }: TexturedPlanetMeshProps) {
-  const diffusePath = config.diffuse ? getTexturePath(config.category, config.diffuse) : null
-  const gradientPath = getTexturePath(config.category, config.gradient)
-
-  const defaultTexture = useMemo(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = canvas.height = 2
-    const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#888888'
-    ctx.fillRect(0, 0, 2, 2)
-    return new THREE.CanvasTexture(canvas)
-  }, [])
-
-  const diffuse = useLoader(
-    THREE.TextureLoader,
-    diffusePath || '/models/planets/aurora/gradient_barren.png'
-  )
-  const gradient = useLoader(THREE.TextureLoader, gradientPath)
-
-  const atmosphereColor = ATMOSPHERE_COLORS[config.category]
-  const isLava = config.category === 'lava'
-  const isPlasma = config.category === 'plasma'
-
-  const material = useMemo(() => {
-    const tex = diffusePath ? diffuse : defaultTexture
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-
-    return new THREE.ShaderMaterial({
-      vertexShader: planetVertexShader,
-      fragmentShader: planetFragmentShader,
-      uniforms: {
-        uDiffuse: { value: tex },
-        uGradient: { value: gradient },
-        uAtmosphereColor: { value: atmosphereColor },
-        uAtmosphereIntensity: { value: config.hasAtmosphere ? 0.4 : 0.0 },
-        uEmissiveIntensity: { value: isLava || isPlasma ? 0.8 : 0.0 },
-        uTime: { value: 0 },
-        uStarPosition: { value: starPosition },
-        uStarColor: { value: starColor },
-      },
-    })
-  }, [diffuse, gradient, atmosphereColor, config.hasAtmosphere, isLava, isPlasma, diffusePath, defaultTexture, starPosition, starColor])
-
-  const atmosphereMaterial = useMemo(() => {
-    if (!config.hasAtmosphere) return null
-    return new THREE.ShaderMaterial({
-      vertexShader: atmosphereVertexShader,
-      fragmentShader: atmosphereFragmentShader,
-      uniforms: {
-        uColor: { value: atmosphereColor },
-        uIntensity: { value: 1.0 },
-      },
-      transparent: true,
-      side: THREE.BackSide,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-  }, [config.hasAtmosphere, atmosphereColor])
-
-  useFrame(({ clock }) => {
-    if (material.uniforms.uTime) {
-      material.uniforms.uTime.value = clock.elapsedTime
-    }
-  })
-
-  return (
-    <>
-      <mesh material={material}>
-        <sphereGeometry args={[scaledRadius, 32, 32]} />
-      </mesh>
-      {atmosphereMaterial && (
-        <mesh material={atmosphereMaterial}>
-          <sphereGeometry args={[scaledRadius * 1.05, 32, 32]} />
-        </mesh>
-      )}
-    </>
-  )
 }
 
 interface OrbitingPlanetProps {
@@ -444,7 +135,7 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
             <meshBasicMaterial color={0x444444} />
           </mesh>
         }>
-          <TexturedPlanetMesh config={config} scaledRadius={scaledRadius} starPosition={starPosition} starColor={starColor} />
+          <PlanetMesh config={config} scaledRadius={scaledRadius} starPosition={starPosition} starColor={starColor} />
         </Suspense>
       </group>
     </>
