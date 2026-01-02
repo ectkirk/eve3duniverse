@@ -7,7 +7,7 @@ import { PostProcessing } from './components/PostProcessing'
 import * as styles from './styles'
 
 export function App() {
-  const { systems, loading, error } = useUniverseData()
+  const { systems, regions, loading, error } = useUniverseData()
   const [showEscapeMenu, setShowEscapeMenu] = useState(false)
   const [colorMode, setColorMode] = useState(0)
 
@@ -19,9 +19,10 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'c' && !e.repeat) {
-        setColorMode((prev) => (prev === 0 ? 1 : 0))
-      }
+      if (e.repeat) return
+      if (e.key === '1') setColorMode(0)
+      else if (e.key === '2') setColorMode(1)
+      else if (e.key === '3') setColorMode(2)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -35,7 +36,7 @@ export function App() {
         style={{ width: '100%', height: '100%', background: '#000' }}
       >
         <CameraController />
-        {systems.length > 0 && <Stars systems={systems} colorMode={colorMode} />}
+        {systems.length > 0 && <Stars systems={systems} regions={regions} colorMode={colorMode} />}
         <PostProcessing />
       </Canvas>
 
@@ -55,9 +56,9 @@ export function App() {
       {!loading && !error && (
         <div style={{ ...styles.hudPanel, color: '#fff', fontSize: '14px', fontFamily: 'monospace' }}>
           <div>Systems: {systems.length.toLocaleString()}</div>
-          <div>Color: {colorMode === 0 ? 'Star Temperature' : 'Security Status'}</div>
+          <div>Color: {['Star Type', 'Security', 'Region'][colorMode]}</div>
           <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
-            WASD: move | Mouse: look | C: color | ESC: menu
+            WASD: move | Mouse: look | 1/2/3: color | ESC: menu
           </div>
         </div>
       )}

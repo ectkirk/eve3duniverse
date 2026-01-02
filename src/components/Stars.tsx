@@ -1,11 +1,12 @@
 import { useMemo, useRef, useEffect } from 'react'
 import * as THREE from 'three'
-import type { SolarSystem } from '../types/universe'
+import type { SolarSystem, Region } from '../types/universe'
 import { EVE_COORDINATE_SCALE, STAR_VISUALS } from '../constants'
 import { starVertexShader, starFragmentShader } from '../shaders/starShader'
 
 interface StarsProps {
   systems: SolarSystem[]
+  regions: Record<string, Region>
   colorMode: number
 }
 
@@ -20,7 +21,7 @@ function radiusToSize(radius: number): number {
   return STAR_VISUALS.minSize + t * (STAR_VISUALS.maxSize - STAR_VISUALS.minSize)
 }
 
-export function Stars({ systems, colorMode }: StarsProps) {
+export function Stars({ systems, regions, colorMode }: StarsProps) {
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
 
   const geometry = useMemo(() => {
@@ -29,10 +30,12 @@ export function Stars({ systems, colorMode }: StarsProps) {
     const temperatures = new Float32Array(systems.length)
     const securities = new Float32Array(systems.length)
     const luminosities = new Float32Array(systems.length)
+    const regionPositions = new Float32Array(systems.length * 3)
 
     systems.forEach((system, i) => {
       const radius = system.star?.radius ?? SUN_RADIUS * 0.5
       const lum = system.star?.luminosity ?? STAR_VISUALS.defaultLum
+      const region = regions[system.regionId]
       positions[i * 3] = system.position.x * EVE_COORDINATE_SCALE
       positions[i * 3 + 1] = system.position.y * EVE_COORDINATE_SCALE
       positions[i * 3 + 2] = system.position.z * EVE_COORDINATE_SCALE
@@ -40,6 +43,9 @@ export function Stars({ systems, colorMode }: StarsProps) {
       temperatures[i] = system.star?.temperature ?? STAR_VISUALS.defaultTemp
       securities[i] = system.securityStatus
       luminosities[i] = lum
+      regionPositions[i * 3] = (region?.position.x ?? 0) * EVE_COORDINATE_SCALE
+      regionPositions[i * 3 + 1] = (region?.position.y ?? 0) * EVE_COORDINATE_SCALE
+      regionPositions[i * 3 + 2] = (region?.position.z ?? 0) * EVE_COORDINATE_SCALE
     })
 
     const geo = new THREE.BufferGeometry()
@@ -48,9 +54,10 @@ export function Stars({ systems, colorMode }: StarsProps) {
     geo.setAttribute('temperature', new THREE.BufferAttribute(temperatures, 1))
     geo.setAttribute('security', new THREE.BufferAttribute(securities, 1))
     geo.setAttribute('luminosity', new THREE.BufferAttribute(luminosities, 1))
+    geo.setAttribute('regionPos', new THREE.BufferAttribute(regionPositions, 3))
 
     return geo
-  }, [systems])
+  }, [systems, regions])
 
   const material = useMemo(() => {
     const mat = new THREE.ShaderMaterial({

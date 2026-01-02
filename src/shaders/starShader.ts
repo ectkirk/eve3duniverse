@@ -3,6 +3,7 @@ attribute float size;
 attribute float temperature;
 attribute float security;
 attribute float luminosity;
+attribute vec3 regionPos;
 
 uniform float colorMode;
 
@@ -24,6 +25,14 @@ vec3 hslToRgb(float h, float s, float l) {
   else rgb = vec3(c, 0.0, x);
 
   return rgb + m;
+}
+
+vec3 regionToRGB(vec3 pos) {
+  float scale = 0.15;
+  float hue = mod((pos.x + pos.y * 1.7 + pos.z * 2.3) * scale * 360.0, 360.0);
+  float sat = 0.7 + 0.3 * sin(pos.x * scale * 3.0);
+  float lit = 0.45 + 0.15 * sin(pos.y * scale * 2.5);
+  return hslToRgb(abs(hue), clamp(sat, 0.6, 1.0), clamp(lit, 0.35, 0.6));
 }
 
 vec3 securityToRGB(float sec) {
@@ -89,7 +98,9 @@ vec3 stellarColor(float tempK) {
 }
 
 void main() {
-  if (colorMode > 0.5) {
+  if (colorMode > 1.5) {
+    vColor = regionToRGB(regionPos);
+  } else if (colorMode > 0.5) {
     vColor = securityToRGB(security);
   } else {
     vColor = stellarColor(temperature);

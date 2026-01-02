@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
-import type { SolarSystem } from '../types/universe'
+import type { SolarSystem, Region } from '../types/universe'
 import { ALLOWED_REGIONS } from '../data/allowedRegions'
 
 interface UseUniverseDataResult {
   systems: SolarSystem[]
+  regions: Record<string, Region>
   loading: boolean
   error: string | null
 }
 
 export function useUniverseData(): UseUniverseDataResult {
   const [systems, setSystems] = useState<SolarSystem[]>([])
+  const [regions, setRegions] = useState<Record<string, Region>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,6 +32,7 @@ export function useUniverseData(): UseUniverseDataResult {
         })
 
         setSystems(filtered)
+        setRegions(result.regions)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
@@ -40,5 +43,5 @@ export function useUniverseData(): UseUniverseDataResult {
     load()
   }, [])
 
-  return { systems, loading, error }
+  return { systems, regions, loading, error }
 }
