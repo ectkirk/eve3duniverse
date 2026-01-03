@@ -8,6 +8,8 @@ release/
 .claude/
 CLAUDE.md
 .tmp/
+.sde-yaml/
+.sde-jsonl/
 sde.zip
 resfileindex.txt
 assets/stargates/**/*.gr2

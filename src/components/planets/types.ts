@@ -11,9 +11,27 @@ export type PresetType =
 
 export type ShaderType = 'terrestrial' | 'gasgiant' | 'ice' | 'lava' | 'basic'
 
+export interface ShaderPresetParameters {
+  WindFactors?: number[]
+  ringColor1?: number[]
+  ringColor2?: number[]
+  ringColor3?: number[]
+  CapColor?: number[]
+  DistoFactors?: number[]
+  Saturation?: number[]
+  RingsFactors?: number[]
+  GeometryDeformation?: number[]
+  GeometryAnimation?: number[]
+  ColorParams?: number[]
+  MaskParams0?: number[]
+  MaskParams1?: number[]
+  Geometry?: number[]
+}
+
 export interface ShaderPreset {
   type: PresetType
   textures: Record<string, string>
+  parameters?: ShaderPresetParameters
 }
 
 export interface OrbitParams {

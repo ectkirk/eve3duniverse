@@ -45,6 +45,8 @@ const planetFragmentShader = `
   uniform sampler2D uNormalHeight2;
   uniform sampler2D uLavaNoise;
   uniform sampler2D uLightning;
+  uniform sampler2D uGasGiantMixer;
+  uniform sampler2D uGasGiantNoise;
   uniform float uHasCityLights;
   uniform float uHasScatter;
   uniform float uHasHeightMap;
@@ -52,11 +54,14 @@ const planetFragmentShader = `
   uniform float uHasNormalMap;
   uniform float uHasLavaNoise;
   uniform float uHasLightning;
+  uniform float uHasGasGiantMixer;
+  uniform float uHasGasGiantNoise;
   uniform float uTime;
   uniform vec3 uStarPosition;
   uniform vec3 uStarColor;
   uniform float uPlanetType;
   uniform float uTemperature;
+  uniform vec4 uWindFactors;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -94,31 +99,64 @@ const planetFragmentShader = `
 
     vec2 animatedUv = vUv;
     float surfaceSpeed = 0.002;
-    if (uPlanetType < 0.5) {
-      float latitude = vUv.y - 0.5;
-      float bandSpeed = surfaceSpeed * (1.0 + abs(latitude) * 2.0);
-      animatedUv.x = vUv.x + uTime * bandSpeed * sign(latitude);
-      animatedUv.y = vUv.y + sin(vUv.x * 12.0 + uTime * 0.5) * 0.003;
-    } else if (uPlanetType > 2.5 && uPlanetType < 3.5) {
+    if (uPlanetType > 2.5 && uPlanetType < 3.5) {
       animatedUv.x = vUv.x + uTime * surfaceSpeed * 0.3;
     }
 
     vec3 perturbedNormal = perturbNormal(normal, animatedUv);
-
     vec4 diffuse = texture2D(uDiffuse, animatedUv);
+    vec3 baseColor;
 
-    float gradientSample = dot(perturbedNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
-    vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
+    if (uPlanetType < 0.5) {
+      float latitude = vUv.y - 0.5;
+      float baseSpeed = uWindFactors.x > 0.0 ? uWindFactors.x : 0.3;
+      float latVariation = uWindFactors.y > 0.0 ? uWindFactors.y : 0.5;
+      float bandSpeed = baseSpeed * surfaceSpeed * (1.0 + abs(latitude) * latVariation * 4.0);
+      vec2 bandUv = vUv;
+      bandUv.x += uTime * bandSpeed * sign(latitude);
 
-    float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
+      vec4 bands = texture2D(uDiffuse, bandUv);
 
-    vec3 baseColor = diffuse.rgb * gradientColor * 1.5 * (0.7 + 0.3 * poleMask);
+      float mixer = 0.5;
+      if (uHasGasGiantMixer > 0.5) {
+        mixer = texture2D(uGasGiantMixer, bandUv).r;
+      }
 
-    if (uHasHeightMap > 0.5) {
-      float h1 = texture2D(uHeightMap1, animatedUv).r;
-      float h2 = texture2D(uHeightMap2, animatedUv).r;
-      float heightBlend = mix(h1, h2, 0.5);
-      baseColor *= 0.8 + 0.4 * heightBlend;
+      float noise = 0.0;
+      float noiseSpeed = uWindFactors.z > 0.0 ? uWindFactors.z : 0.2;
+      if (uHasGasGiantNoise > 0.5) {
+        vec2 noiseUv = bandUv * 2.0 + vec2(uTime * noiseSpeed * 0.05, 0.0);
+        noise = texture2D(uGasGiantNoise, noiseUv).r;
+        float distortion = uWindFactors.w > 0.0 ? uWindFactors.w : 0.12;
+        bandUv.y += (noise - 0.5) * distortion * mixer;
+        bands = texture2D(uDiffuse, bandUv);
+      }
+
+      float gradientSample = bands.r * mixer + (1.0 - mixer) * bands.g;
+      vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
+
+      float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
+
+      baseColor = bands.rgb * gradientColor * 1.5;
+      baseColor *= 0.7 + 0.3 * poleMask;
+
+      if (uHasGasGiantNoise > 0.5) {
+        baseColor += gradientColor * noise * 0.1;
+      }
+    } else {
+      float gradientSample = dot(perturbedNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+      vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
+
+      float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
+
+      baseColor = diffuse.rgb * gradientColor * 1.5 * (0.7 + 0.3 * poleMask);
+
+      if (uHasHeightMap > 0.5) {
+        float h1 = texture2D(uHeightMap1, animatedUv).r;
+        float h2 = texture2D(uHeightMap2, animatedUv).r;
+        float heightBlend = mix(h1, h2, 0.5);
+        baseColor *= 0.8 + 0.4 * heightBlend;
+      }
     }
 
     // Lava with 3D noise
@@ -218,6 +256,8 @@ interface TexturePathsResult {
   normalHeight2Index: number
   lavaNoiseIndex: number
   lightningIndex: number
+  gasGiantMixerIndex: number
+  gasGiantNoiseIndex: number
 }
 
 function getPlanetTypeNum(presetType: string): number {
@@ -253,6 +293,19 @@ function getTexturePathsForPreset(
   if (tex.ColorGradientMap) paths.push(getTexturePath(tex.ColorGradientMap))
   if (tex.PolesGradient) paths.push(getTexturePath(tex.PolesGradient))
   else if (tex.PolesMaskMap) paths.push(getTexturePath(tex.PolesMaskMap))
+
+  let gasGiantMixerIndex = -1
+  let gasGiantNoiseIndex = -1
+  if (shaderType === 'gasgiant') {
+    if (tex.HeightMap) {
+      gasGiantMixerIndex = paths.length
+      paths.push(getTexturePath(tex.HeightMap))
+    }
+    if (tex.NoiseMap) {
+      gasGiantNoiseIndex = paths.length
+      paths.push(getTexturePath(tex.NoiseMap))
+    }
+  }
   if (tex.CityLight) paths.push(getTexturePath(tex.CityLight))
   if (tex.GroundScattering1) paths.push(getTexturePath(tex.GroundScattering1))
   if (tex.GroundScattering2) paths.push(getTexturePath(tex.GroundScattering2))
@@ -314,6 +367,8 @@ function getTexturePathsForPreset(
     normalHeight2Index,
     lavaNoiseIndex,
     lightningIndex,
+    gasGiantMixerIndex,
+    gasGiantNoiseIndex,
   }
 }
 
@@ -366,8 +421,18 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       uHasLavaNoise: { value: 0.0 },
       uLightning: { value: placeholderTexture },
       uHasLightning: { value: 0.0 },
+      uGasGiantMixer: { value: placeholderTexture },
+      uGasGiantNoise: { value: placeholderTexture },
+      uHasGasGiantMixer: { value: 0.0 },
+      uHasGasGiantNoise: { value: 0.0 },
       uPlanetType: { value: getPlanetTypeNum(presetType) },
       uTemperature: { value: temperature },
+      uWindFactors: { value: new THREE.Vector4(
+        preset.parameters?.WindFactors?.[0] ?? 0.3,
+        preset.parameters?.WindFactors?.[1] ?? 0.5,
+        preset.parameters?.WindFactors?.[2] ?? 0.2,
+        preset.parameters?.WindFactors?.[3] ?? 0.12
+      ) },
     }
 
     if (tex.CityLight && population) {
@@ -435,6 +500,21 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       lightningTex.wrapS = lightningTex.wrapT = THREE.RepeatWrapping
       uniforms.uLightning = { value: lightningTex }
       uniforms.uHasLightning = { value: 1.0 }
+    }
+
+    const { gasGiantMixerIndex, gasGiantNoiseIndex } = textureResult
+    if (gasGiantMixerIndex >= 0) {
+      const mixerTex = getTexture(gasGiantMixerIndex)
+      mixerTex.wrapS = mixerTex.wrapT = THREE.RepeatWrapping
+      uniforms.uGasGiantMixer = { value: mixerTex }
+      uniforms.uHasGasGiantMixer = { value: 1.0 }
+    }
+
+    if (gasGiantNoiseIndex >= 0) {
+      const noiseTex = getTexture(gasGiantNoiseIndex)
+      noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping
+      uniforms.uGasGiantNoise = { value: noiseTex }
+      uniforms.uHasGasGiantNoise = { value: 1.0 }
     }
 
     log.debug(`Creating shader for ${presetType}`)
