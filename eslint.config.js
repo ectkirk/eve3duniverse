@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 import eslintConfigPrettier from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-electron/', 'release/', 'node_modules/'] },
+  { ignores: ['dist/', 'dist-electron/', 'release/', 'node_modules/', 'ccpwgl/'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   eslintConfigPrettier,

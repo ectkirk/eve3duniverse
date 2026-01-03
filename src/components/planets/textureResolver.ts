@@ -29,6 +29,7 @@ export interface TexturePathsResult {
   cityLightIndex: number
   scatterLightIndex: number
   scatterHueIndex: number
+  colorizeMapIndex: number
 }
 
 export function getTexturePathsForPreset(
@@ -149,6 +150,12 @@ export function getTexturePathsForPreset(
     paths.push(getTexturePath(tex.LightningMap))
   }
 
+  let colorizeMapIndex = -1
+  if (tex.ColorizeMap) {
+    colorizeMapIndex = paths.length
+    paths.push(getTexturePath(tex.ColorizeMap))
+  }
+
   return {
     paths,
     diffuseIndex,
@@ -167,6 +174,7 @@ export function getTexturePathsForPreset(
     cityLightIndex,
     scatterLightIndex,
     scatterHueIndex,
+    colorizeMapIndex,
   }
 }
 

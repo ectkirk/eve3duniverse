@@ -102,6 +102,7 @@ export function PlanetMesh({
       uLightning: { value: placeholderTexture },
       uGasGiantMixer: { value: placeholderTexture },
       uGasGiantNoise: { value: placeholderTexture },
+      uColorizeMap: { value: placeholderTexture },
 
       // Feature flags
       uHasCityLights: { value: 0.0 },
@@ -113,6 +114,7 @@ export function PlanetMesh({
       uHasLightning: { value: 0.0 },
       uHasGasGiantMixer: { value: 0.0 },
       uHasGasGiantNoise: { value: 0.0 },
+      uHasColorizeMap: { value: 0.0 },
 
       // Preset parameters (from shader-presets.json)
       uWindFactors: { value: new THREE.Vector4(
@@ -138,6 +140,52 @@ export function PlanetMesh({
         preset.parameters?.Saturation?.[1] ?? GAS_GIANT.DEFAULT_SATURATION[1],
         preset.parameters?.Saturation?.[2] ?? GAS_GIANT.DEFAULT_SATURATION[2],
         preset.parameters?.Saturation?.[3] ?? GAS_GIANT.DEFAULT_SATURATION[3]
+      ) },
+      uBandingSpeed: { value: new THREE.Vector4(
+        preset.parameters?.BandingSpeed?.[0] ?? 0.0,
+        preset.parameters?.BandingSpeed?.[1] ?? 0.0,
+        preset.parameters?.BandingSpeed?.[2] ?? 0.0,
+        preset.parameters?.BandingSpeed?.[3] ?? 0.0
+      ) },
+
+      // Ice preset parameters
+      uIceRampColorLow: { value: new THREE.Vector4(
+        preset.parameters?.IceRampColorLow?.[0] ?? 0.8,
+        preset.parameters?.IceRampColorLow?.[1] ?? 0.85,
+        preset.parameters?.IceRampColorLow?.[2] ?? 0.9,
+        preset.parameters?.IceRampColorLow?.[3] ?? 1.0
+      ) },
+      uIceRampColorMiddle: { value: new THREE.Vector4(
+        preset.parameters?.IceRampColorMiddle?.[0] ?? 0.4,
+        preset.parameters?.IceRampColorMiddle?.[1] ?? 0.5,
+        preset.parameters?.IceRampColorMiddle?.[2] ?? 0.6,
+        preset.parameters?.IceRampColorMiddle?.[3] ?? 1.0
+      ) },
+      uIceRampColorHigh: { value: new THREE.Vector4(
+        preset.parameters?.IceRampColorHigh?.[0] ?? 0.1,
+        preset.parameters?.IceRampColorHigh?.[1] ?? 0.15,
+        preset.parameters?.IceRampColorHigh?.[2] ?? 0.2,
+        preset.parameters?.IceRampColorHigh?.[3] ?? 1.0
+      ) },
+
+      // Lava preset parameters
+      uAnimationFactors: { value: new THREE.Vector4(
+        preset.parameters?.AnimationFactors?.[0] ?? 0.0,
+        preset.parameters?.AnimationFactors?.[1] ?? 0.2,
+        preset.parameters?.AnimationFactors?.[2] ?? 0.0,
+        preset.parameters?.AnimationFactors?.[3] ?? 1.0
+      ) },
+      uLavaColor1: { value: new THREE.Vector4(
+        preset.parameters?.LavaColor1?.[0] ?? 24.0,
+        preset.parameters?.LavaColor1?.[1] ?? 5.7,
+        preset.parameters?.LavaColor1?.[2] ?? 0.0,
+        preset.parameters?.LavaColor1?.[3] ?? 1.0
+      ) },
+      uLavaColor2: { value: new THREE.Vector4(
+        preset.parameters?.LavaColor2?.[0] ?? 0.0,
+        preset.parameters?.LavaColor2?.[1] ?? 0.0,
+        preset.parameters?.LavaColor2?.[2] ?? 0.0,
+        preset.parameters?.LavaColor2?.[3] ?? 1.0
       ) },
 
       // LIGHTING constants (from src/constants/planets.ts)
@@ -275,6 +323,14 @@ export function PlanetMesh({
       noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping
       uniforms.uGasGiantNoise = { value: noiseTex }
       uniforms.uHasGasGiantNoise = { value: 1.0 }
+    }
+
+    const { colorizeMapIndex } = textureResult
+    if (colorizeMapIndex >= 0) {
+      const colorizeTex = getTexture(colorizeMapIndex)
+      colorizeTex.wrapS = colorizeTex.wrapT = THREE.RepeatWrapping
+      uniforms.uColorizeMap = { value: colorizeTex }
+      uniforms.uHasColorizeMap = { value: 1.0 }
     }
 
     if (planetFragmentShader.includes('#include')) {

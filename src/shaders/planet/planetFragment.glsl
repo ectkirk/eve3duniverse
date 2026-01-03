@@ -22,6 +22,7 @@ uniform sampler2D uLavaNoise;
 uniform sampler2D uLightning;
 uniform sampler2D uGasGiantMixer;
 uniform sampler2D uGasGiantNoise;
+uniform sampler2D uColorizeMap;
 
 // Feature flags
 uniform float uHasCityLights;
@@ -33,6 +34,7 @@ uniform float uHasLavaNoise;
 uniform float uHasLightning;
 uniform float uHasGasGiantMixer;
 uniform float uHasGasGiantNoise;
+uniform float uHasColorizeMap;
 
 // Dynamic uniforms
 uniform float uTime;
@@ -46,6 +48,17 @@ uniform vec4 uWindFactors;
 uniform vec4 uCapColor;
 uniform vec4 uDistoFactors;
 uniform vec4 uSaturation;
+uniform vec4 uBandingSpeed;
+
+// Ice preset parameters
+uniform vec4 uIceRampColorLow;
+uniform vec4 uIceRampColorMiddle;
+uniform vec4 uIceRampColorHigh;
+
+// Lava preset parameters
+uniform vec4 uAnimationFactors;
+uniform vec4 uLavaColor1;
+uniform vec4 uLavaColor2;
 
 // Constants from src/constants/planets.ts (LIGHTING, ANIMATION groups)
 uniform float uShadowFloor;       // LIGHTING.SHADOW_FLOOR
@@ -157,7 +170,11 @@ void main() {
     float baseSpeed = uWindFactors.x > 0.0 ? uWindFactors.x : 0.3;
     float latVariation = uWindFactors.y > 0.0 ? uWindFactors.y : 0.5;
     float latFactor = latitude * uLatFactorScale;
-    float bandSpeed = baseSpeed * uSurfaceSpeed * (1.0 + abs(latitude) * latVariation * uLatVariationScale);
+
+    // Use BandingSpeed[2] as speed multiplier if available
+    float bandingMultiplier = uBandingSpeed.z > 0.0 ? uBandingSpeed.z : 1.0;
+    float bandSpeed = baseSpeed * uSurfaceSpeed * bandingMultiplier * (1.0 + abs(latitude) * latVariation * uLatVariationScale);
+
     vec2 bandUv = vUv;
     bandUv.x += uTime * bandSpeed * latFactor;
 
@@ -225,18 +242,56 @@ void main() {
       float heightBlend = mix(h1, h2, 0.5);
       baseColor *= 0.8 + 0.4 * heightBlend;
     }
+
+    // Ice planet color tinting (type 4)
+    if (uPlanetType > 3.5 && uPlanetType < 4.5) {
+      float height = 0.5;
+      if (uHasBakedHeightMap > 0.5) {
+        height = texture2D(uBakedHeightMap, animatedUv).r;
+      }
+
+      // Blend between low/middle/high colors based on height
+      vec3 lowColor = uIceRampColorLow.rgb;
+      vec3 midColor = uIceRampColorMiddle.rgb;
+      vec3 highColor = uIceRampColorHigh.rgb;
+
+      vec3 iceColor;
+      if (height < 0.4) {
+        iceColor = mix(lowColor, midColor, height / 0.4);
+      } else {
+        iceColor = mix(midColor, highColor, (height - 0.4) / 0.6);
+      }
+
+      // Apply colorize map tint if available
+      if (uHasColorizeMap > 0.5) {
+        vec3 colorizeTint = texture2D(uColorizeMap, animatedUv).rgb;
+        iceColor *= colorizeTint * 1.5;
+      }
+
+      baseColor *= iceColor;
+    }
   }
 
   // Lava planet effects (type 3)
   if (uPlanetType > 2.5 && uPlanetType < 3.5) {
     float tempFactor = clamp(uTemperature / uTempScale, uTempClampMin, uTempClampMax);
 
+    // Use AnimationFactors[1] for animation speed (default 0.2 -> scaled to 0.02)
+    float animSpeed = uAnimationFactors.y * 0.1;
+    if (animSpeed < 0.001) animSpeed = 0.02;
+
+    // Use LavaColor1 for glow if available (HDR values normalized)
+    vec3 lavaGlow = uGlowColor;
+    if (uLavaColor1.x > 1.0) {
+      lavaGlow = uLavaColor1.rgb / 24.0;
+    }
+
     float noiseOffset = 0.0;
     if (uHasLavaNoise > 0.5) {
-      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * 0.02, uTime * 0.015);
+      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * animSpeed, uTime * animSpeed * 0.75);
       float noise = texture2D(uLavaNoise, noiseUv).r;
       noiseOffset = noise * uNoiseOffsetScale * tempFactor;
-      baseColor += uGlowColor * noise * uNoiseGlowStrength * tempFactor;
+      baseColor += lavaGlow * noise * uNoiseGlowStrength * tempFactor;
     }
 
     float lavaPulse = uPulseBase + uPulseRange * tempFactor * sin(uTime * uPulseFreq + diffuse.r * 6.28 + noiseOffset);
@@ -248,9 +303,12 @@ void main() {
   if (uPlanetType > 6.5 && uPlanetType < 7.5) {
     float tempFactor = clamp(uTemperature / uTempScale, uTempClampMin, uTempClampMax);
 
+    float animSpeed = uAnimationFactors.y * 0.1;
+    if (animSpeed < 0.001) animSpeed = 0.02;
+
     float noiseOffset = 0.0;
     if (uHasLavaNoise > 0.5) {
-      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * 0.02, uTime * 0.015);
+      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * animSpeed, uTime * animSpeed * 0.75);
       float noise = texture2D(uLavaNoise, noiseUv).r;
       noiseOffset = noise * uNoiseOffsetScale * tempFactor;
       baseColor += uPlasmaGlowColor * noise * uNoiseGlowStrength * tempFactor;
@@ -275,17 +333,24 @@ void main() {
   if (uPlanetType > 7.5 && uPlanetType < 8.5) {
     float tempFactor = clamp(uTemperature / uTempScale, uTempClampMin, uTempClampMax);
 
+    float animSpeed = uAnimationFactors.y * 0.1;
+    if (animSpeed < 0.001) animSpeed = 0.02;
+
+    vec3 lavaGlow = uGlowColor;
+    if (uLavaColor1.x > 1.0) {
+      lavaGlow = uLavaColor1.rgb / 24.0;
+    }
+
     float noiseOffset = 0.0;
     if (uHasLavaNoise > 0.5) {
-      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * 0.02, uTime * 0.015);
+      vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * animSpeed, uTime * animSpeed * 0.75);
       float noise = texture2D(uLavaNoise, noiseUv).r;
       noiseOffset = noise * uNoiseOffsetScale * tempFactor;
-      baseColor += uGlowColor * noise * uNoiseGlowStrength * tempFactor;
+      baseColor += lavaGlow * noise * uNoiseGlowStrength * tempFactor;
     }
 
     float shatteredPulse = uPulseBase + uPulseRange * tempFactor * sin(uTime * uPulseFreq + diffuse.r * 6.28 + noiseOffset);
     baseColor *= shatteredPulse;
-    // Shattered has more cracks/emissive details
     baseColor += diffuse.rgb * uSecondaryGlow * 1.5 * tempFactor * (0.5 + 0.5 * sin(uTime * uSecondaryFreq));
   }
 

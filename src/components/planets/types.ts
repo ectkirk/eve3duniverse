@@ -22,7 +22,9 @@ export type PresetType =
 export type ShaderType = 'terrestrial' | 'gasgiant' | 'ice' | 'lava' | 'basic'
 
 export interface ShaderPresetParameters {
+  // Gas Giant
   WindFactors?: number[]
+  BandingSpeed?: number[]
   ringColor1?: number[]
   ringColor2?: number[]
   ringColor3?: number[]
@@ -32,13 +34,28 @@ export interface ShaderPresetParameters {
   RingsFactors?: number[]
   GeometryDeformation?: number[]
   GeometryAnimation?: number[]
+  // Ice
+  IceFactors?: number[]
+  IceDetail?: number[]
+  IceSpecular?: number[]
+  IceRampColorLow?: number[]
+  IceRampColorMiddle?: number[]
+  IceRampColorHigh?: number[]
+  // Lava
+  AnimationFactors?: number[]
+  DetailFactors?: number[]
+  LavaColor1?: number[]
+  LavaColor2?: number[]
+  LavaSpecular?: number[]
+  MiscFactors?: number[]
+  // Common
   ColorParams?: number[]
   MaskParams0?: number[]
   MaskParams1?: number[]
   Geometry?: number[]
-  AtmosphereFactors?: [number, number, number, number]
-  ScatteringFactors?: [number, number, number, number]
-  Wavelengths?: [number, number, number]
+  AtmosphereFactors?: number[]
+  ScatteringFactors?: number[]
+  Wavelengths?: number[]
 }
 
 export interface AtmosphereParams {
@@ -116,11 +133,15 @@ export const ATMOSPHERE_PARAMS_BY_TYPE: Record<string, AtmosphereParams> = {
 export function getAtmosphereParams(preset: ShaderPreset): AtmosphereParams {
   const params = preset.parameters
   const baseParams = ATMOSPHERE_PARAMS_BY_TYPE[preset.type] ?? DEFAULT_ATMOSPHERE_PARAMS
-  if (params?.AtmosphereFactors && params?.ScatteringFactors && params?.Wavelengths) {
+  if (
+    params?.AtmosphereFactors?.length === 4 &&
+    params?.ScatteringFactors?.length === 4 &&
+    params?.Wavelengths?.length === 3
+  ) {
     return {
-      atmosphereFactors: params.AtmosphereFactors,
-      scatteringFactors: params.ScatteringFactors,
-      wavelengths: params.Wavelengths,
+      atmosphereFactors: params.AtmosphereFactors as unknown as readonly [number, number, number, number],
+      scatteringFactors: params.ScatteringFactors as unknown as readonly [number, number, number, number],
+      wavelengths: params.Wavelengths as unknown as readonly [number, number, number],
       scale: baseParams.scale,
     }
   }
