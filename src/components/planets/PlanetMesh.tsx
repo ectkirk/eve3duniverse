@@ -62,6 +62,9 @@ const planetFragmentShader = `
   uniform float uPlanetType;
   uniform float uTemperature;
   uniform vec4 uWindFactors;
+  uniform vec4 uCapColor;
+  uniform vec4 uDistoFactors;
+  uniform vec4 uSaturation;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -128,7 +131,9 @@ const planetFragmentShader = `
       if (uHasGasGiantNoise > 0.5) {
         vec2 noiseUv = bandUv * 2.0 + vec2(uTime * noiseSpeed * 0.05, 0.0);
         noise = texture2D(uGasGiantNoise, noiseUv).r;
-        float distortion = uWindFactors.w > 0.0 ? uWindFactors.w : 0.12;
+        float baseDistortion = uWindFactors.w > 0.0 ? uWindFactors.w : 0.12;
+        float distoScale = uDistoFactors.x > 0.0 ? uDistoFactors.x / 10.0 : 0.4;
+        float distortion = baseDistortion * distoScale;
         bandUv.y += (noise - 0.5) * distortion * mixer;
         pattern = texture2D(uDiffuse, bandUv);
       }
@@ -136,14 +141,28 @@ const planetFragmentShader = `
       float gradientSample = pattern.r * mixer + (1.0 - mixer) * pattern.g;
       vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
 
+      float satBoost = uSaturation.x > 0.0 ? uSaturation.x : 1.0;
+      float gray = dot(gradientColor, vec3(0.299, 0.587, 0.114));
+      gradientColor = mix(vec3(gray), gradientColor, satBoost);
+
       float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
+      float poleBlend = 1.0 - poleMask;
+      float capTint = uCapColor.x > 0.0 ? uCapColor.x : 0.0;
+      vec3 polarTint = vec3(1.0 + capTint * poleBlend * 4.0, 1.0 - capTint * poleBlend, 1.0 - capTint * poleBlend);
 
       float intensity = 0.8 + 0.4 * pattern.a;
-      baseColor = gradientColor * intensity;
+      baseColor = gradientColor * intensity * polarTint;
       baseColor *= 0.7 + 0.3 * poleMask;
 
       if (uHasGasGiantNoise > 0.5) {
         baseColor += gradientColor * noise * 0.1;
+      }
+
+      if (uHasHeightMap > 0.5) {
+        vec3 h1 = texture2D(uHeightMap1, bandUv * 0.5).rgb;
+        vec3 h2 = texture2D(uHeightMap2, bandUv * 0.5 + vec2(0.25, 0.0)).rgb;
+        vec3 heightBlend = mix(h1, h2, mixer);
+        baseColor *= 0.85 + 0.3 * dot(heightBlend, vec3(0.333));
       }
     } else {
       float gradientSample = dot(perturbedNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
@@ -434,6 +453,24 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
         preset.parameters?.WindFactors?.[1] ?? 0.5,
         preset.parameters?.WindFactors?.[2] ?? 0.2,
         preset.parameters?.WindFactors?.[3] ?? 0.12
+      ) },
+      uCapColor: { value: new THREE.Vector4(
+        preset.parameters?.CapColor?.[0] ?? 0.0,
+        preset.parameters?.CapColor?.[1] ?? 0.0,
+        preset.parameters?.CapColor?.[2] ?? 0.0,
+        preset.parameters?.CapColor?.[3] ?? 0.0
+      ) },
+      uDistoFactors: { value: new THREE.Vector4(
+        preset.parameters?.DistoFactors?.[0] ?? 4.0,
+        preset.parameters?.DistoFactors?.[1] ?? 0.0,
+        preset.parameters?.DistoFactors?.[2] ?? 0.0,
+        preset.parameters?.DistoFactors?.[3] ?? 0.0
+      ) },
+      uSaturation: { value: new THREE.Vector4(
+        preset.parameters?.Saturation?.[0] ?? 1.0,
+        preset.parameters?.Saturation?.[1] ?? 0.0,
+        preset.parameters?.Saturation?.[2] ?? 0.0,
+        preset.parameters?.Saturation?.[3] ?? 0.0
       ) },
     }
 
