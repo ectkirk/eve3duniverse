@@ -129,3 +129,66 @@ export const heightBlitFragmentShader = `
     gl_FragColor = blended;
   }
 `
+
+export const atmosphereVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+  varying vec3 vWorldPosition;
+  varying vec3 vWorldNormal;
+
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+export const atmosphereFragmentShader = `
+  uniform sampler2D uScatterLight;
+  uniform sampler2D uScatterHue;
+  uniform vec3 uStarPosition;
+  uniform vec3 uStarColor;
+  uniform vec4 uAtmosphereColor;
+  uniform vec4 uScatteringFactors;
+
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+  varying vec3 vWorldPosition;
+  varying vec3 vWorldNormal;
+
+  void main() {
+    vec3 viewDir = normalize(-vPosition);
+    vec3 normal = normalize(vNormal);
+    vec3 worldNormal = normalize(vWorldNormal);
+
+    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+
+    vec3 lightDir = normalize(uStarPosition - vWorldPosition);
+    float NdotL = dot(worldNormal, lightDir);
+
+    float scatterStrength = uScatteringFactors.x;
+    float atmosphereScale = uScatteringFactors.y;
+
+    float viewAngle = 1.0 - max(dot(normal, viewDir), 0.0);
+    float sunAngle = max(0.0, dot(lightDir, -viewDir));
+
+    vec3 scatterLight = texture2D(uScatterLight, vec2(viewAngle, 0.5)).rgb;
+    vec3 scatterHue = texture2D(uScatterHue, vec2(viewAngle, 0.5)).rgb;
+
+    vec3 scatterColor = mix(scatterHue, scatterLight, sunAngle);
+    scatterColor *= uAtmosphereColor.rgb;
+
+    float horizonGlow = pow(fresnel, 2.0) * max(NdotL + 0.3, 0.0);
+    float sunGlow = pow(max(0.0, dot(reflect(-viewDir, normal), lightDir)), 8.0) * 0.5;
+
+    vec3 finalColor = scatterColor * (horizonGlow + sunGlow) * scatterStrength;
+    finalColor *= uStarColor;
+
+    float alpha = fresnel * atmosphereScale * (0.5 + 0.5 * max(NdotL, 0.0));
+    alpha = clamp(alpha, 0.0, 0.8);
+
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`
