@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import { config } from 'dotenv'
-import react from '@vitejs/plugin-react'
+import react from '@vitejs/plugin-react-swc'
 import electron from 'vite-plugin-electron'
 import electronRenderer from 'vite-plugin-electron-renderer'
 import glsl from 'vite-plugin-glsl'
