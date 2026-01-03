@@ -111,11 +111,12 @@ const planetFragmentShader = `
       float latitude = vUv.y - 0.5;
       float baseSpeed = uWindFactors.x > 0.0 ? uWindFactors.x : 0.3;
       float latVariation = uWindFactors.y > 0.0 ? uWindFactors.y : 0.5;
+      float latFactor = latitude * 2.0;
       float bandSpeed = baseSpeed * surfaceSpeed * (1.0 + abs(latitude) * latVariation * 4.0);
       vec2 bandUv = vUv;
-      bandUv.x += uTime * bandSpeed * sign(latitude);
+      bandUv.x += uTime * bandSpeed * latFactor;
 
-      vec4 bands = texture2D(uDiffuse, bandUv);
+      vec4 pattern = texture2D(uDiffuse, bandUv);
 
       float mixer = 0.5;
       if (uHasGasGiantMixer > 0.5) {
@@ -129,15 +130,16 @@ const planetFragmentShader = `
         noise = texture2D(uGasGiantNoise, noiseUv).r;
         float distortion = uWindFactors.w > 0.0 ? uWindFactors.w : 0.12;
         bandUv.y += (noise - 0.5) * distortion * mixer;
-        bands = texture2D(uDiffuse, bandUv);
+        pattern = texture2D(uDiffuse, bandUv);
       }
 
-      float gradientSample = bands.r * mixer + (1.0 - mixer) * bands.g;
+      float gradientSample = pattern.r * mixer + (1.0 - mixer) * pattern.g;
       vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
 
       float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
 
-      baseColor = bands.rgb * gradientColor * 1.5;
+      float intensity = 0.8 + 0.4 * pattern.a;
+      baseColor = gradientColor * intensity;
       baseColor *= 0.7 + 0.3 * poleMask;
 
       if (uHasGasGiantNoise > 0.5) {
