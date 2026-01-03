@@ -5,13 +5,16 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
 import { STARGATE_MODELS, getStarTextures } from '../types/universe'
-import { PlanetMesh, getPlanetConfig, type OrbitParams } from './planets'
+import { PlanetMesh, type OrbitParams, type ShaderPreset } from './planets'
+import shaderPresets from '../data/shader-presets.json'
 import {
   starVertexShader,
   starFragmentShader,
   glowVertexShader,
   glowFragmentShader,
 } from '../shaders/planetShaders'
+
+const presetData = shaderPresets as Record<string, ShaderPreset>
 
 interface FocusedStarProps {
   system: SolarSystem
@@ -101,7 +104,13 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
     )
   }, [orbitParams, initialAngle])
 
-  const config = useMemo(() => getPlanetConfig(planet.typeId), [planet.typeId])
+  const preset = useMemo(() => {
+    const presetId = planet.shaderPreset?.toString()
+    if (presetId && presetData[presetId]) {
+      return presetData[presetId]
+    }
+    return { type: 'sandstorm' as const, textures: { FillTexture: 'global/black.webp', ColorGradientMap: 'aurora/gradient_barren.webp' } }
+  }, [planet.shaderPreset])
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return
@@ -135,7 +144,7 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
             <meshBasicMaterial color={0x444444} />
           </mesh>
         }>
-          <PlanetMesh config={config} scaledRadius={scaledRadius} starPosition={starPosition} starColor={starColor} />
+          <PlanetMesh preset={preset} population={planet.population ?? false} scaledRadius={scaledRadius} starPosition={starPosition} starColor={starColor} />
         </Suspense>
       </group>
     </>

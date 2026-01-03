@@ -1,9 +1,8 @@
 export { PlanetMesh } from './PlanetMesh'
 export {
-  type PlanetCategory,
-  type PlanetTextureConfig,
+  type PresetType,
+  type ShaderPreset,
   type OrbitParams,
-  ATMOSPHERE_COLORS,
-  getPlanetConfig,
+  getShaderType,
   getTexturePath,
 } from './types'

@@ -26,6 +26,10 @@ export interface Planet {
   eccentricity: number
   locked: boolean
   position: Position
+  heightMap1?: number
+  heightMap2?: number
+  shaderPreset?: number
+  population?: boolean
 }
 
 export interface Region {
