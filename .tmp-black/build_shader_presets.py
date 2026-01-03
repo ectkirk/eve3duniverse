@@ -29,11 +29,22 @@ class BlackParser:
     ]
 
     VEC4_PARAM_NAMES = [
-        'WindFactors', 'BandingSpeed', 'ringColor1', 'ringColor2', 'ringColor3',
-        'CapColor', 'DistoFactors', 'Saturation', 'RingsFactors', 'Alpha',
+        # Gas Giant
+        'WindFactors', 'BandingSpeed', 'CapColor', 'DistoFactors', 'Saturation',
+        'RingsFactors', 'ringColor1', 'ringColor2', 'ringColor3', 'Alpha',
+        # Ice
+        'IceFactors', 'IceDetail', 'IceSpecular',
+        'IceRampColorLow', 'IceRampColorMiddle', 'IceRampColorHigh',
+        # Lava
+        'AnimationFactors', 'DetailFactors', 'LavaColor1', 'LavaColor2',
+        'LavaSpecular', 'MiscFactors',
+        # Atmosphere
+        'AtmosphereFactors', 'ScatteringFactors', 'AtmosphereColor',
+        # Common
         'ColorParams', 'GeometryDeformation', 'GeometryAnimation',
-        'MaskParams0', 'MaskParams1', 'CloudSpeed', 'LavaGlow', 'GlowColor',
-        'CloudColor', 'IceColor', 'LavaColor', 'Geometry'
+        'CloudSpeed', 'CloudsColor', 'CloudsFactors',
+        # Thunderstorm
+        'LightningColor', 'LightningFactors',
     ]
 
     def __init__(self, data: bytes):
@@ -104,53 +115,65 @@ class BlackParser:
 
     def extract_parameters(self):
         """Extract vec4 shader parameters using two patterns:
-        1. Tr2Vector4Parameter blocks: [type_idx][name_idx][vec4 at +4]
-        2. Inline parameters: [name_idx][6 zero bytes][vec4 at +8]
+        1. [name_idx:2][vec4:16] - vec4 at +2 offset
+        2. [name_idx:2][padding:6][vec4:16] - vec4 at +8 offset (6 zero bytes padding)
         """
         params = {}
         ds = self.data_section
 
-        if self.vec4_type_idx is None or self.vec4_type_idx < 0:
-            return params
-
-        # Pattern 1: Find Tr2Vector4Parameter type markers
-        for i in range(0, len(ds) - 20, 2):
+        # Scan for parameter name indices
+        for i in range(0, len(ds) - 24, 2):
             idx = struct.unpack('<H', ds[i:i+2])[0]
-            if idx == self.vec4_type_idx:
-                name_idx = struct.unpack('<H', ds[i+2:i+4])[0]
-                if 0 < name_idx < len(self.strings):
-                    name = self.strings[name_idx]
-                    if name in self.VEC4_PARAM_NAMES and name not in params:
-                        vals = struct.unpack('<4f', ds[i+4:i+20])
-                        if self._is_valid_vec4(vals):
-                            params[name] = [round(v, 6) for v in vals]
 
-        # Pattern 2: Find inline parameters [name_idx][6 zeros][vec4]
-        for name, name_idx in self.name_to_idx.items():
-            if name in params:
+            if idx not in self.name_to_idx.values():
                 continue
-            for i in range(0, len(ds) - 24, 2):
-                idx = struct.unpack('<H', ds[i:i+2])[0]
-                if idx == name_idx:
-                    # Skip if preceded by Tr2Vector4Parameter (handled above)
-                    if i >= 2:
-                        prev_idx = struct.unpack('<H', ds[i-2:i])[0]
-                        if prev_idx == self.vec4_type_idx:
-                            continue
-                    # Check for 6 zero bytes followed by vec4
-                    if i + 24 <= len(ds):
-                        padding = ds[i+2:i+8]
-                        if padding == b'\x00\x00\x00\x00\x00\x00':
-                            vals = struct.unpack('<4f', ds[i+8:i+24])
-                            if self._is_valid_vec4(vals):
-                                params[name] = [round(v, 6) for v in vals]
-                                break
+
+            # Find the name for this index
+            name = None
+            for n, ni in self.name_to_idx.items():
+                if ni == idx:
+                    name = n
+                    break
+
+            if name is None or name in params:
+                continue
+
+            # Try pattern 1: vec4 at +2
+            vals2 = None
+            valid2 = False
+            if i + 18 <= len(ds):
+                vals2 = struct.unpack('<4f', ds[i+2:i+18])
+                valid2 = self._is_valid_vec4_nonzero(vals2)
+
+            # Try pattern 2: 6 zero bytes then vec4 at +8
+            vals8 = None
+            valid8 = False
+            if i + 24 <= len(ds):
+                padding = ds[i+2:i+8]
+                is_padded = all(b == 0 for b in padding)
+                if is_padded:
+                    vals8 = struct.unpack('<4f', ds[i+8:i+24])
+                    valid8 = self._is_valid_vec4_nonzero(vals8)
+
+            # Choose the best match
+            if valid2 and valid8:
+                nz2 = sum(1 for v in vals2 if abs(v) > 0.0001)
+                nz8 = sum(1 for v in vals8 if abs(v) > 0.0001)
+                if nz8 >= nz2:
+                    params[name] = [round(v, 6) for v in vals8]
+                else:
+                    params[name] = [round(v, 6) for v in vals2]
+            elif valid8:
+                params[name] = [round(v, 6) for v in vals8]
+            elif valid2:
+                params[name] = [round(v, 6) for v in vals2]
 
         return params
 
-    def _is_valid_vec4(self, vals):
+    def _is_valid_vec4_nonzero(self, vals):
         return (all(-1000 <= v <= 1000 for v in vals) and
-                all(v == v for v in vals))
+                all(v == v for v in vals) and
+                any(abs(v) > 0.0001 for v in vals))
 
     def get_type(self):
         for s in self.strings:

@@ -15,3 +15,4 @@ resfileindex.txt
 assets/stargates/**/*.gr2
 assets/stargates/**/*.dds
 .tmp-black/
+ccpwgl/
