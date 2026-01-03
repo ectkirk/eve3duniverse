@@ -74,7 +74,7 @@ const RegionLabel = memo(function RegionLabel({ label, colorMode }: { label: Lab
       color={color}
       anchorX="center"
       anchorY="middle"
-      fontWeight="bold"
+      font="/fonts/evesansneue-regular.otf"
     >
       {label.name}
     </Text>

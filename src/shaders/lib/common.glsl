@@ -32,11 +32,11 @@ vec2 directionToSphericalUV(vec3 dir) {
   return vec2(u, v);
 }
 
-// Saturate helper
-float saturate(float x) {
+// Saturate helper (renamed to avoid GLSL reserved word conflicts)
+float saturateF(float x) {
   return clamp(x, 0.0, 1.0);
 }
 
-vec3 saturate(vec3 x) {
+vec3 saturateV(vec3 x) {
   return clamp(x, vec3(0.0), vec3(1.0));
 }

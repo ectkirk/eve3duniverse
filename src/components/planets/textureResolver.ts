@@ -12,6 +12,9 @@ export function getHeightMapPath(graphicId: number | undefined): string | null {
 
 export interface TexturePathsResult {
   paths: string[]
+  diffuseIndex: number
+  gradientIndex: number
+  poleMaskIndex: number
   heightMap1Index: number
   heightMap2Index: number
   cloudsIndex: number
@@ -22,6 +25,9 @@ export interface TexturePathsResult {
   lightningIndex: number
   gasGiantMixerIndex: number
   gasGiantNoiseIndex: number
+  cityLightIndex: number
+  scatterLightIndex: number
+  scatterHueIndex: number
 }
 
 export function getTexturePathsForPreset(
@@ -33,17 +39,39 @@ export function getTexturePathsForPreset(
   const tex = preset.textures
   const shaderType = getShaderType(preset.type)
 
+  let diffuseIndex = -1
   if (shaderType === 'gasgiant') {
-    if (tex.DistortionMap) paths.push(getTexturePath(tex.DistortionMap))
-    else if (tex.FillTexture) paths.push(getTexturePath(tex.FillTexture))
+    if (tex.DistortionMap) {
+      diffuseIndex = paths.length
+      paths.push(getTexturePath(tex.DistortionMap))
+    } else if (tex.FillTexture) {
+      diffuseIndex = paths.length
+      paths.push(getTexturePath(tex.FillTexture))
+    }
   } else {
-    if (tex.FillTexture) paths.push(getTexturePath(tex.FillTexture))
-    else if (tex.CloudsTexture) paths.push(getTexturePath(tex.CloudsTexture))
+    if (tex.FillTexture) {
+      diffuseIndex = paths.length
+      paths.push(getTexturePath(tex.FillTexture))
+    } else if (tex.CloudsTexture) {
+      diffuseIndex = paths.length
+      paths.push(getTexturePath(tex.CloudsTexture))
+    }
   }
 
-  if (tex.ColorGradientMap) paths.push(getTexturePath(tex.ColorGradientMap))
-  if (tex.PolesGradient) paths.push(getTexturePath(tex.PolesGradient))
-  else if (tex.PolesMaskMap) paths.push(getTexturePath(tex.PolesMaskMap))
+  let gradientIndex = -1
+  if (tex.ColorGradientMap) {
+    gradientIndex = paths.length
+    paths.push(getTexturePath(tex.ColorGradientMap))
+  }
+
+  let poleMaskIndex = -1
+  if (tex.PolesGradient) {
+    poleMaskIndex = paths.length
+    paths.push(getTexturePath(tex.PolesGradient))
+  } else if (tex.PolesMaskMap) {
+    poleMaskIndex = paths.length
+    paths.push(getTexturePath(tex.PolesMaskMap))
+  }
 
   let gasGiantMixerIndex = -1
   let gasGiantNoiseIndex = -1
@@ -57,9 +85,21 @@ export function getTexturePathsForPreset(
       paths.push(getTexturePath(tex.NoiseMap))
     }
   }
-  if (tex.CityLight) paths.push(getTexturePath(tex.CityLight))
-  if (tex.GroundScattering1) paths.push(getTexturePath(tex.GroundScattering1))
-  if (tex.GroundScattering2) paths.push(getTexturePath(tex.GroundScattering2))
+  let cityLightIndex = -1
+  if (tex.CityLight) {
+    cityLightIndex = paths.length
+    paths.push(getTexturePath(tex.CityLight))
+  }
+  let scatterLightIndex = -1
+  let scatterHueIndex = -1
+  if (tex.GroundScattering1) {
+    scatterLightIndex = paths.length
+    paths.push(getTexturePath(tex.GroundScattering1))
+  }
+  if (tex.GroundScattering2) {
+    scatterHueIndex = paths.length
+    paths.push(getTexturePath(tex.GroundScattering2))
+  }
 
   let heightMap1Index = -1
   let heightMap2Index = -1
@@ -110,6 +150,9 @@ export function getTexturePathsForPreset(
 
   return {
     paths,
+    diffuseIndex,
+    gradientIndex,
+    poleMaskIndex,
     heightMap1Index,
     heightMap2Index,
     cloudsIndex,
@@ -120,6 +163,9 @@ export function getTexturePathsForPreset(
     lightningIndex,
     gasGiantMixerIndex,
     gasGiantNoiseIndex,
+    cityLightIndex,
+    scatterLightIndex,
+    scatterHueIndex,
   }
 }
 

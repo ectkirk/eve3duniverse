@@ -1,0 +1,56 @@
+{
+  "terrestrial": {
+    "maxVertexScale": 1.015,
+    "ScatteringFactors": [
+      0.5451,
+      0.6039,
+      0.651,
+      1.0
+    ],
+    "wavelengths": [
+      0.005,
+      0.002,
+      20.0
+    ],
+    "AtmosphereColor": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "ocean": {
+    "maxVertexScale": 1.02563,
+    "ScatteringFactors": [
+      0.5451,
+      0.5843,
+      0.6196,
+      1.0
+    ],
+    "wavelengths": [
+      0.005,
+      0.002,
+      20.0
+    ],
+    "AtmosphereColor": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "ice": {},
+  "lava": {
+    "wavelengths": [
+      0.005,
+      0.002,
+      20.0
+    ],
+    "ScatteringFactors": [
+      0.7333,
+      0.7137,
+      0.6392,
+      1.0
+    ]
+  }
+}

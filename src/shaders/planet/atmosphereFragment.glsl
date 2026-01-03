@@ -44,7 +44,7 @@ void main() {
   // Sample scattering textures
   vec3 scatterLight = texture2D(uScatterLight, vec2(viewAngle, 0.5)).rgb;
   vec3 scatterHue = texture2D(uScatterHue, vec2(viewAngle, 0.5)).rgb;
-  float sunFactor = saturate(cosTheta * 0.5 + 0.5);
+  float sunFactor = saturateF(cosTheta * 0.5 + 0.5);
   vec3 textureScatter = mix(scatterHue, scatterLight, sunFactor);
 
   // Apply scattering coefficients from preset
@@ -67,19 +67,19 @@ void main() {
   float fresnel = fresnelPower(NdotV, 3.0);
 
   // Day/night intensity modulation
-  float horizonGlow = pow(fresnel, 2.0) * saturate(NdotL + 0.3);
-  float sunGlow = pow(saturate(dot(reflect(-viewDir, normal), lightDir)), 8.0) * 0.5;
+  float horizonGlow = pow(fresnel, 2.0) * saturateF(NdotL + 0.3);
+  float sunGlow = pow(saturateF(dot(reflect(-viewDir, normal), lightDir)), 8.0) * 0.5;
   float dayIntensity = horizonGlow + sunGlow;
 
   // Night side limb glow
-  float nightLimb = pow(fresnel, 4.0) * 0.12 * saturate(-NdotL);
+  float nightLimb = pow(fresnel, 4.0) * 0.12 * saturateF(-NdotL);
 
   // Final color composition
   vec3 finalColor = scatterColor * (dayIntensity + nightLimb) * intensity;
   finalColor *= uStarColor;
 
   // Alpha based on fresnel and day/night
-  float dayFactor = 0.5 + 0.5 * saturate(NdotL);
+  float dayFactor = 0.5 + 0.5 * saturateF(NdotL);
   float alpha = fresnel * uAtmosphereFactors.a * max(dayFactor, nightLimb * 2.0);
   alpha = clamp(alpha, 0.0, 0.85);
 

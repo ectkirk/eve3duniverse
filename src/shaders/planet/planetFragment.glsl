@@ -3,6 +3,7 @@
 #include "../lib/lighting.glsl"
 #include "../lib/noise.glsl"
 
+uniform mat4 modelMatrix;
 uniform sampler2D uDiffuse;
 uniform sampler2D uGradient;
 uniform sampler2D uPoleMask;
@@ -171,7 +172,7 @@ void main() {
   float shadow = 0.15 + 0.85 * max(NdotL, 0.0);
 
   if (uHasBakedHeightMap > 0.5) {
-    vec3 worldPerturbedNormal = normalize(mat3(1.0) * perturbedNormal);
+    vec3 worldPerturbedNormal = normalize(mat3(modelMatrix) * perturbedNormal);
     float bumpLight = max(dot(worldPerturbedNormal, lightDir), 0.0);
     shadow = 0.15 + 0.85 * mix(max(NdotL, 0.0), bumpLight, 0.5);
   }

@@ -16,7 +16,7 @@ float eveOpticalDepth(float x) {
 // wavelengths in micrometers (typical: 0.650, 0.570, 0.475 for RGB)
 vec3 rayleighCoefficient(vec3 wavelengths) {
   vec3 l4 = wavelengths * wavelengths * wavelengths * wavelengths;
-  return 1.0 / l4;
+  return 1.0 / (l4 + 0.0001);
 }
 
 // Rayleigh phase function

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
 import { STARGATE_MODELS, getStarTextures } from '../types/universe'
-import { PlanetMesh, AtmosphereMesh, type OrbitParams, type ShaderPreset } from './planets'
+import { PlanetMesh, AtmosphereMesh, PlanetErrorBoundary, type OrbitParams, type ShaderPreset } from './planets'
 import shaderPresets from '../data/shader-presets.json'
 import { SCENE, SOLAR_RADIUS_M } from '../constants'
 import {
@@ -140,32 +140,35 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
     <>
       {showOrbitLines && <OrbitRing orbit={orbitParams} />}
       <group ref={groupRef}>
-        <Suspense fallback={
-          <mesh>
-            <sphereGeometry args={[scaledRadius, 16, 16]} />
-            <meshBasicMaterial color={0x444444} />
-          </mesh>
-        }>
-          <PlanetMesh
-            preset={preset}
-            population={planet.population ?? false}
-            scaledRadius={scaledRadius}
-            starPosition={starPosition}
-            starColor={starColor}
-            heightMap1={planet.heightMap1}
-            heightMap2={planet.heightMap2}
-            temperature={planet.temperature}
-            rotationRate={planet.rotationRate}
-          />
-          {preset.textures.GroundScattering1 && (
-            <AtmosphereMesh
+        <PlanetErrorBoundary fallbackRadius={scaledRadius}>
+          <Suspense fallback={
+            <mesh>
+              <sphereGeometry args={[scaledRadius, 16, 16]} />
+              <meshBasicMaterial color={0x444444} />
+            </mesh>
+          }>
+            <PlanetMesh
               preset={preset}
-              planetRadius={scaledRadius}
+              population={planet.population ?? false}
+              scaledRadius={scaledRadius}
               starPosition={starPosition}
               starColor={starColor}
+              heightMap1={planet.heightMap1}
+              heightMap2={planet.heightMap2}
+              temperature={planet.temperature}
+              rotationRate={planet.rotationRate}
+              planetId={planet.id}
             />
-          )}
-        </Suspense>
+            {preset.textures.GroundScattering1 && (
+              <AtmosphereMesh
+                preset={preset}
+                planetRadius={scaledRadius}
+                starPosition={starPosition}
+                starColor={starColor}
+              />
+            )}
+          </Suspense>
+        </PlanetErrorBoundary>
       </group>
     </>
   )

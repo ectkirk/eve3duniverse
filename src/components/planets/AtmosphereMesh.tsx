@@ -12,13 +12,13 @@ interface AtmosphereMeshProps {
   starColor: THREE.Color
 }
 
-const ATMOSPHERE_SCALE = 1.025
+const PLACEHOLDER_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 function createPlaceholderTexture(): THREE.Texture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = 2
   const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = '#4488ff'
+  ctx.fillStyle = '#888888'
   ctx.fillRect(0, 0, 2, 2)
   return new THREE.CanvasTexture(canvas)
 }
@@ -39,10 +39,11 @@ export function AtmosphereMesh({
     if (preset.textures.GroundScattering2) {
       paths.push(getTexturePath(preset.textures.GroundScattering2))
     }
-    return paths.length > 0 ? paths : null
+    return paths
   }, [preset.textures])
 
-  const textures = texturePaths ? useLoader(THREE.TextureLoader, texturePaths) : null
+  const loadedTextures = useLoader(THREE.TextureLoader, texturePaths.length > 0 ? texturePaths : [PLACEHOLDER_DATA_URL])
+  const textures = texturePaths.length > 0 ? loadedTextures : null
 
   const params = getAtmosphereParams(preset)
 
@@ -69,7 +70,7 @@ export function AtmosphereMesh({
     })
   }, [textures, starPosition, starColor, params, placeholderTexture])
 
-  const atmosphereRadius = planetRadius * ATMOSPHERE_SCALE
+  const atmosphereRadius = planetRadius * params.scale
 
   return (
     <mesh material={material}>

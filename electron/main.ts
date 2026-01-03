@@ -34,6 +34,10 @@ function createWindow(): void {
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
+    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      const levelNames = ['debug', 'info', 'warn', 'error']
+      console.log(`[Renderer:${levelNames[level] ?? level}] ${message} (${sourceId}:${line})`)
+    })
   } else {
     mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }

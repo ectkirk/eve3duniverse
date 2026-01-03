@@ -21,6 +21,7 @@ interface PlanetMeshProps {
   heightMap2?: number
   temperature: number
   rotationRate: number
+  planetId: number
 }
 
 function createPlaceholderTexture(): THREE.Texture {
@@ -42,6 +43,7 @@ export function PlanetMesh({
   heightMap2,
   temperature,
   rotationRate,
+  planetId,
 }: PlanetMeshProps) {
   const presetType = preset.type
 
@@ -57,20 +59,18 @@ export function PlanetMesh({
   const normalHeight1Tex = normalHeight1Index >= 0 ? textures[normalHeight1Index] ?? null : null
   const normalHeight2Tex = normalHeight2Index >= 0 ? (textures[normalHeight2Index] ?? normalHeight1Tex) : normalHeight1Tex
 
-  const randomSeed = useMemo(() => Math.floor(Math.random() * 100), [])
-  const bakedHeightMap = useHeightMapBaker(normalHeight1Tex, normalHeight2Tex, randomSeed)
+  const heightSeed = useMemo(() => planetId % 100, [planetId])
+  const bakedHeightMap = useHeightMapBaker(normalHeight1Tex, normalHeight2Tex, heightSeed)
 
   useEffect(() => {
     log.debug(`Loaded ${textureResult.paths.length} textures for ${presetType}`)
   }, [textureResult.paths.length, presetType])
 
   const material = useMemo(() => {
-    const tex = preset.textures
-    let idx = 0
-
     const getTexture = (i: number): THREE.Texture => textures[i] ?? placeholderTexture
 
-    const diffuseTex = getTexture(idx++)
+    const { diffuseIndex, gradientIndex, poleMaskIndex } = textureResult
+    const diffuseTex = diffuseIndex >= 0 ? getTexture(diffuseIndex) : placeholderTexture
     diffuseTex.wrapS = diffuseTex.wrapT = THREE.RepeatWrapping
 
     const uniforms: Record<string, { value: unknown }> = {
@@ -78,8 +78,8 @@ export function PlanetMesh({
       uStarPosition: { value: starPosition },
       uStarColor: { value: starColor },
       uDiffuse: { value: diffuseTex },
-      uGradient: { value: tex.ColorGradientMap ? getTexture(idx++) : placeholderTexture },
-      uPoleMask: { value: (tex.PolesGradient || tex.PolesMaskMap) ? getTexture(idx++) : placeholderTexture },
+      uGradient: { value: gradientIndex >= 0 ? getTexture(gradientIndex) : placeholderTexture },
+      uPoleMask: { value: poleMaskIndex >= 0 ? getTexture(poleMaskIndex) : placeholderTexture },
       uCityLight: { value: placeholderTexture },
       uHasCityLights: { value: 0.0 },
       uScatterLight: { value: placeholderTexture },
@@ -129,16 +129,15 @@ export function PlanetMesh({
       ) },
     }
 
-    if (tex.CityLight && population) {
-      uniforms.uCityLight = { value: getTexture(idx++) }
+    const { cityLightIndex, scatterLightIndex, scatterHueIndex } = textureResult
+    if (cityLightIndex >= 0 && population) {
+      uniforms.uCityLight = { value: getTexture(cityLightIndex) }
       uniforms.uHasCityLights = { value: 1.0 }
-    } else if (tex.CityLight) {
-      idx++
     }
 
-    if (tex.GroundScattering1 && tex.GroundScattering2) {
-      uniforms.uScatterLight = { value: getTexture(idx++) }
-      uniforms.uScatterHue = { value: getTexture(idx++) }
+    if (scatterLightIndex >= 0 && scatterHueIndex >= 0) {
+      uniforms.uScatterLight = { value: getTexture(scatterLightIndex) }
+      uniforms.uScatterHue = { value: getTexture(scatterHueIndex) }
       uniforms.uHasScatter = { value: 1.0 }
     }
 
@@ -202,15 +201,40 @@ export function PlanetMesh({
       uniforms.uHasGasGiantNoise = { value: 1.0 }
     }
 
-    log.debug(`Creating shader for ${presetType}`)
-    return new THREE.ShaderMaterial({
+    log.debug(`Creating shader for ${presetType}, textures: ${textures.length}`)
+    if (planetFragmentShader.includes('#include')) {
+      console.error('[PlanetMesh] GLSL includes not processed! Shader:', planetFragmentShader.slice(0, 500))
+    }
+    const mat = new THREE.ShaderMaterial({
       vertexShader: planetVertexShader,
       fragmentShader: planetFragmentShader,
       uniforms,
     })
+    mat.needsUpdate = true
+    return mat
   }, [textures, preset, presetType, starPosition, starColor, placeholderTexture, population, textureResult, temperature, bakedHeightMap])
 
   const meshRef = useRef<THREE.Mesh>(null)
+
+  useEffect(() => {
+    const checkShader = () => {
+      if (!meshRef.current) return
+      const gl = meshRef.current.parent?.parent?.parent as unknown as { __r3f?: { gl?: THREE.WebGLRenderer } }
+      const renderer = gl?.__r3f?.gl
+      if (!renderer) return
+
+      const props = renderer.properties.get(material) as { program?: { program: WebGLProgram } } | undefined
+      if (props?.program) {
+        const gl2 = renderer.getContext()
+        const linked = gl2.getProgramParameter(props.program.program, gl2.LINK_STATUS)
+        if (!linked) {
+          log.error(`Shader link failed for ${presetType}:`, gl2.getProgramInfoLog(props.program.program))
+        }
+      }
+    }
+    const timer = setTimeout(checkShader, 100)
+    return () => clearTimeout(timer)
+  }, [material, presetType])
 
   const rotationSpeed = useMemo(() => {
     if (!rotationRate || rotationRate === 0) return 0.01
