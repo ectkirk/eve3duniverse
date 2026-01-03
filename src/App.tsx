@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useUniverseData } from './hooks/useUniverseData'
+import { PLANET_TYPES } from './types/universe'
 import { Stars } from './components/Stars'
 import { RegionLabels, ccpRound } from './components/RegionLabels'
 import { CameraController } from './components/CameraController'
@@ -227,6 +228,42 @@ export function App() {
                 </div>
               ))}
             </div>
+
+            {focusedBodyId?.startsWith('planet-') && (() => {
+              const planetId = parseInt(focusedBodyId.replace('planet-', ''), 10)
+              const planet = focusInfo.target!.system.planets.find((p) => p.id === planetId)
+              if (!planet) return null
+              const planetType = PLANET_TYPES[planet.typeId] || 'unknown'
+              return (
+                <div style={{ marginTop: '16px', borderTop: '1px solid #333', paddingTop: '12px' }}>
+                  <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Details</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Type</span>
+                      <span style={{ color: '#fff', textTransform: 'capitalize' }}>{planetType}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Radius</span>
+                      <span style={{ color: '#fff' }}>{(planet.radius / 1000).toLocaleString()} km</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Temperature</span>
+                      <span style={{ color: '#fff' }}>{Math.round(planet.temperature)} K</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Orbit</span>
+                      <span style={{ color: '#fff' }}>{(planet.orbitRadius / 149597870.7).toFixed(2)} AU</span>
+                    </div>
+                    {planet.population && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#888' }}>Status</span>
+                        <span style={{ color: '#5f5' }}>Populated</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
         </div>
       )}
 
