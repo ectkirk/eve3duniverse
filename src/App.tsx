@@ -182,20 +182,20 @@ export function App() {
       </Canvas>
 
       {loading && (
-        <div style={{ ...styles.centered, color: '#fff', fontSize: '24px', fontFamily: 'sans-serif' }}>
+        <div style={{ ...styles.centered, color: '#fff', fontSize: '24px' }}>
           Loading universe data...
         </div>
       )}
 
       {error && (
-        <div style={{ ...styles.centered, ...styles.panelBackground, color: '#f55', fontSize: '18px', fontFamily: 'sans-serif', textAlign: 'center' }}>
+        <div style={{ ...styles.centered, ...styles.panelBackground, color: '#f55', fontSize: '18px', textAlign: 'center' }}>
           <div>Error loading universe data</div>
           <div style={{ fontSize: '14px', marginTop: '10px', color: '#aaa' }}>{error}</div>
         </div>
       )}
 
       {!loading && !error && (
-        <div style={{ ...styles.hudPanel, color: '#fff', fontSize: '14px', fontFamily: 'monospace' }}>
+        <div style={{ ...styles.hudPanel, color: '#fff', fontSize: '14px' }}>
           <div>Systems: {systems.length.toLocaleString()}</div>
           <div>Color: {['Star Type', 'Security', 'Region'][colorMode]}</div>
           <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
@@ -216,7 +216,6 @@ export function App() {
               width: '300px',
               padding: '10px 14px',
               fontSize: '14px',
-              fontFamily: 'monospace',
               background: 'rgba(0,0,0,0.9)',
               border: '1px solid #444',
               borderRadius: '4px',
@@ -241,7 +240,6 @@ export function App() {
                     padding: '8px 14px',
                     cursor: 'pointer',
                     borderBottom: '1px solid #333',
-                    fontFamily: 'monospace',
                     fontSize: '13px',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(100,200,255,0.2)' }}
@@ -296,10 +294,10 @@ export function App() {
               strokeWidth="2"
             />
           </svg>
-          <div style={{ color: '#6cf', fontSize: '12px', fontFamily: 'monospace', marginTop: '8px' }}>
+          <div style={{ color: '#6cf', fontSize: '12px', marginTop: '8px' }}>
             SPACE to enter
           </div>
-          <div style={{ color: '#fff', fontSize: '14px', fontFamily: 'monospace', marginTop: '4px' }}>
+          <div style={{ color: '#fff', fontSize: '14px', marginTop: '4px' }}>
             {focusInfo.target.system.name}
           </div>
         </div>
@@ -407,7 +405,7 @@ export function App() {
 
       {showEscapeMenu && (
         <div style={{ ...styles.overlay, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-          <h1 style={{ color: '#fff', fontFamily: 'sans-serif', margin: 0 }}>EVE 3D Universe</h1>
+          <h1 style={{ color: '#fff', margin: 0 }}>EVE 3D Universe</h1>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <button onClick={() => setShowEscapeMenu(false)} style={{ ...styles.button, background: '#333' }}>
               Resume

@@ -62,9 +62,6 @@ export function PlanetMesh({
   const heightSeed = useMemo(() => planetId % 100, [planetId])
   const bakedHeightMap = useHeightMapBaker(normalHeight1Tex, normalHeight2Tex, heightSeed)
 
-  useEffect(() => {
-    log.debug(`Loaded ${textureResult.paths.length} textures for ${presetType}`)
-  }, [textureResult.paths.length, presetType])
 
   const material = useMemo(() => {
     const getTexture = (i: number): THREE.Texture => textures[i] ?? placeholderTexture
@@ -201,9 +198,8 @@ export function PlanetMesh({
       uniforms.uHasGasGiantNoise = { value: 1.0 }
     }
 
-    log.debug(`Creating shader for ${presetType}, textures: ${textures.length}`)
     if (planetFragmentShader.includes('#include')) {
-      console.error('[PlanetMesh] GLSL includes not processed! Shader:', planetFragmentShader.slice(0, 500))
+      console.error('[PlanetMesh] GLSL includes not processed!')
     }
     const mat = new THREE.ShaderMaterial({
       vertexShader: planetVertexShader,

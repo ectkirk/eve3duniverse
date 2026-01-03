@@ -3,6 +3,7 @@ import { Text } from '@react-three/drei'
 import type { Region, SolarSystem } from '../types/universe'
 import { EVE_COORDINATE_SCALE } from '../constants'
 import { ALLOWED_REGIONS } from '../data/allowedRegions'
+import { FONT_PATHS } from '../fonts'
 
 interface RegionLabelsProps {
   regions: Record<string, Region>
@@ -74,7 +75,7 @@ const RegionLabel = memo(function RegionLabel({ label, colorMode }: { label: Lab
       color={color}
       anchorX="center"
       anchorY="middle"
-      font="/fonts/evesansneue-regular.otf"
+      font={FONT_PATHS.regular}
     >
       {label.name}
     </Text>

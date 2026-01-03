@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { app, BrowserWindow, screen, ipcMain } from 'electron'
+import { app, BrowserWindow, screen, ipcMain, session } from 'electron'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -34,13 +34,31 @@ function createWindow(): void {
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
-    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-      const levelNames = ['debug', 'info', 'warn', 'error']
-      console.log(`[Renderer:${levelNames[level] ?? level}] ${message} (${sourceId}:${line})`)
-    })
+    mainWindow.webContents.on('console-message', ((event: unknown) => {
+      const e = event as { level: number; message: string; line: number; sourceId: string }
+      const levelNames: Record<number, string> = { 0: 'debug', 1: 'info', 2: 'warn', 3: 'error' }
+      console.log(`[Renderer:${levelNames[e.level] ?? e.level}] ${e.message} (${e.sourceId}:${e.line})`)
+    }) as never)
   } else {
     mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+          "worker-src 'self' blob:",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' ws: wss: https:",
+        ].join('; '),
+      },
+    })
+  })
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'Escape' && input.type === 'keyDown') {

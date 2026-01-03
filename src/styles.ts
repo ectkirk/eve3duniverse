@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { FONT_FAMILY } from './fonts'
 
 export const overlay: CSSProperties = {
   position: 'absolute',
@@ -43,7 +44,7 @@ export const systemControlPanel: CSSProperties = {
   background: 'rgba(0,0,0,0.7)',
   padding: '16px 20px',
   borderRadius: '4px',
-  fontFamily: 'monospace',
+  fontFamily: FONT_FAMILY.primary,
   fontSize: '14px',
   color: '#fff',
   minWidth: '160px',
