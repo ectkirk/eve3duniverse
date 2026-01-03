@@ -4,6 +4,20 @@ export interface Position {
   z: number
 }
 
+// EVE planet typeID to type name mapping (from SDE)
+export const PLANET_TYPES: Record<number, string> = {
+  11: 'temperate',
+  12: 'ice',
+  13: 'gas',
+  2014: 'oceanic',
+  2015: 'lava',
+  2016: 'barren',
+  2017: 'storm',
+  2063: 'plasma',
+  30889: 'shattered',
+  73911: 'scorched',
+}
+
 export interface Star {
   id: number
   typeId: number
@@ -24,6 +38,7 @@ export interface Planet {
   orbitPeriod: number
   temperature: number
   eccentricity: number
+  rotationRate: number
   locked: boolean
   position: Position
   heightMap1?: number

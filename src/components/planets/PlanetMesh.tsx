@@ -25,6 +25,8 @@ interface PlanetMeshProps {
   starColor: THREE.Color
   heightMap1?: number
   heightMap2?: number
+  temperature: number
+  rotationRate: number
 }
 
 const planetFragmentShader = `
@@ -46,6 +48,7 @@ const planetFragmentShader = `
   uniform vec3 uStarPosition;
   uniform vec3 uStarColor;
   uniform float uPlanetType;
+  uniform float uTemperature;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -86,11 +89,12 @@ const planetFragmentShader = `
       baseColor *= 0.8 + 0.4 * heightBlend;
     }
 
-    // Lava glow pulse
+    // Lava glow pulse - intensity scales with temperature
     if (uPlanetType > 2.5 && uPlanetType < 3.5) {
-      float lavaPulse = 0.85 + 0.15 * sin(uTime * 0.8 + diffuse.r * 6.28);
+      float tempFactor = clamp(uTemperature / 1500.0, 0.5, 2.0);
+      float lavaPulse = 0.85 + 0.15 * tempFactor * sin(uTime * 0.8 + diffuse.r * 6.28);
       baseColor *= lavaPulse;
-      baseColor += diffuse.rgb * 0.15 * (0.5 + 0.5 * sin(uTime * 1.2));
+      baseColor += diffuse.rgb * 0.15 * tempFactor * (0.5 + 0.5 * sin(uTime * 1.2));
     }
 
     vec3 lightDir = normalize(uStarPosition - vWorldPosition);
@@ -164,7 +168,6 @@ function getPlanetTypeNum(presetType: string): number {
     case 'ice': return 4
     case 'thunderstorm': return 5
     case 'sandstorm': return 6
-    case 'plasma': return 7
     default: return 1
   }
 }
@@ -220,7 +223,11 @@ function getTexturePathsForPreset(
   return { paths, heightMap1Index, heightMap2Index, cloudsIndex, cloudCapIndex }
 }
 
-export function PlanetMesh({ preset, population, scaledRadius, starPosition, starColor, heightMap1, heightMap2 }: PlanetMeshProps) {
+// Typical EVE rotation rates are ~80000-140000 rad/s
+// We scale this to a reasonable visual rotation speed
+const ROTATION_SCALE = 1e-5
+
+export function PlanetMesh({ preset, population, scaledRadius, starPosition, starColor, heightMap1, heightMap2, temperature, rotationRate }: PlanetMeshProps) {
   const presetType = preset.type
 
   const textureResult = useMemo(
@@ -263,6 +270,7 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       uCloudCap: { value: placeholderTexture },
       uHasClouds: { value: 0.0 },
       uPlanetType: { value: getPlanetTypeNum(presetType) },
+      uTemperature: { value: temperature },
     }
 
     if (tex.CityLight && population) {
@@ -308,16 +316,14 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       fragmentShader: planetFragmentShader,
       uniforms,
     })
-  }, [textures, preset, presetType, starPosition, starColor, placeholderTexture, population, textureResult])
+  }, [textures, preset, presetType, starPosition, starColor, placeholderTexture, population, textureResult, temperature])
 
   const meshRef = useRef<THREE.Mesh>(null)
 
   const rotationSpeed = useMemo(() => {
-    const typeNum = getPlanetTypeNum(presetType)
-    if (typeNum === 0) return 0.015
-    if (typeNum === 5) return 0.02
-    return 0.008
-  }, [presetType])
+    if (!rotationRate || rotationRate === 0) return 0.01
+    return rotationRate * ROTATION_SCALE
+  }, [rotationRate])
 
   useFrame(({ clock }) => {
     if (material.uniforms.uTime) {

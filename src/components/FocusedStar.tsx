@@ -7,6 +7,7 @@ import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
 import { STARGATE_MODELS, getStarTextures } from '../types/universe'
 import { PlanetMesh, type OrbitParams, type ShaderPreset } from './planets'
 import shaderPresets from '../data/shader-presets.json'
+import { SCENE, SOLAR_RADIUS_M } from '../constants'
 import {
   starVertexShader,
   starFragmentShader,
@@ -25,8 +26,6 @@ interface FocusedStarProps {
   bodyPositionsRef: React.MutableRefObject<Record<string, THREE.Vector3>>
 }
 
-const SCENE_BASE_RADIUS = 0.08
-const ORBIT_VISUAL_SCALE = 3e-12
 
 function OrbitRing({ orbit }: { orbit: OrbitParams }) {
   const lineRef = useRef<THREE.Line>(null)
@@ -72,10 +71,13 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
   const groupRef = useRef<THREE.Group>(null)
 
   const planetRadiusRatio = planet.radius / starRadius
-  const scaledRadius = Math.max(0.003, Math.min(0.03, planetRadiusRatio * SCENE_BASE_RADIUS * 2))
+  const scaledRadius = Math.max(
+    SCENE.PLANET_RADIUS_MIN,
+    Math.min(SCENE.PLANET_RADIUS_MAX, planetRadiusRatio * SCENE.BASE_RADIUS * 2)
+  )
 
   const orbitParams = useMemo((): OrbitParams => {
-    const semiMajor = planet.orbitRadius * ORBIT_VISUAL_SCALE
+    const semiMajor = planet.orbitRadius * SCENE.ORBIT_SCALE
     const semiMinor = semiMajor * Math.sqrt(1 - planet.eccentricity * planet.eccentricity)
     const pos = planet.position
     const horizontalDist = Math.sqrt(pos.x * pos.x + pos.z * pos.z)
@@ -152,6 +154,8 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
             starColor={starColor}
             heightMap1={planet.heightMap1}
             heightMap2={planet.heightMap2}
+            temperature={planet.temperature}
+            rotationRate={planet.rotationRate}
           />
         </Suspense>
       </group>
@@ -160,7 +164,6 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
 }
 
 const DEFAULT_STARGATE_MODEL = 'asg'
-const STARGATE_MODEL_SCALE = 0.00002
 
 function StargateModel({ stargate }: { stargate: Stargate }) {
   const modelCode = STARGATE_MODELS[stargate.typeId] || DEFAULT_STARGATE_MODEL
@@ -199,9 +202,9 @@ function StargateModel({ stargate }: { stargate: Stargate }) {
 
   const scenePosition = useMemo(() => {
     return new THREE.Vector3(
-      stargate.position.x * ORBIT_VISUAL_SCALE,
-      stargate.position.y * ORBIT_VISUAL_SCALE,
-      stargate.position.z * ORBIT_VISUAL_SCALE
+      stargate.position.x * SCENE.ORBIT_SCALE,
+      stargate.position.y * SCENE.ORBIT_SCALE,
+      stargate.position.z * SCENE.ORBIT_SCALE
     )
   }, [stargate.position])
 
@@ -209,7 +212,7 @@ function StargateModel({ stargate }: { stargate: Stargate }) {
     <primitive
       object={cloned}
       position={scenePosition}
-      scale={[STARGATE_MODEL_SCALE, STARGATE_MODEL_SCALE, STARGATE_MODEL_SCALE]}
+      scale={[SCENE.STARGATE_SCALE, SCENE.STARGATE_SCALE, SCENE.STARGATE_SCALE]}
     />
   )
 }
@@ -259,8 +262,8 @@ function TexturedStar({ star, luminosity }: { star: Star; luminosity: number }) 
   }, [coronaTexture, luminosity])
 
   const starRadius = useMemo(() => {
-    const radiusRatio = star.radius / 696340000
-    return Math.max(0.04, Math.min(0.25, radiusRatio * SCENE_BASE_RADIUS))
+    const radiusRatio = star.radius / SOLAR_RADIUS_M
+    return Math.max(SCENE.STAR_RADIUS_MIN, Math.min(SCENE.STAR_RADIUS_MAX, radiusRatio * SCENE.BASE_RADIUS))
   }, [star.radius])
 
   const glowScale = useMemo(() => {
@@ -304,38 +307,50 @@ function TexturedStar({ star, luminosity }: { star: Star; luminosity: number }) 
   )
 }
 
-function getStarColorFromSpectralClass(spectralClass: string): THREE.Color {
-  const letter = spectralClass.charAt(0).toUpperCase()
-  switch (letter) {
-    case 'O': return new THREE.Color(0.6, 0.7, 1.0)
-    case 'B': return new THREE.Color(0.7, 0.8, 1.0)
-    case 'A': return new THREE.Color(0.9, 0.92, 1.0)
-    case 'F': return new THREE.Color(1.0, 0.98, 0.9)
-    case 'G': return new THREE.Color(1.0, 0.95, 0.7)
-    case 'K': return new THREE.Color(1.0, 0.8, 0.5)
-    case 'M': return new THREE.Color(1.0, 0.5, 0.3)
-    default: return new THREE.Color(1.0, 0.9, 0.7)
+// Black-body approximation: temperature (K) to RGB color
+// Based on Tanner Helland's algorithm
+function getStarColorFromTemperature(tempK: number): THREE.Color {
+  const t = tempK / 100
+  let r: number, g: number, b: number
+
+  if (t <= 66) {
+    r = 255
+    g = Math.min(255, Math.max(0, 99.4708025861 * Math.log(t) - 161.1195681661))
+  } else {
+    r = Math.min(255, Math.max(0, 329.698727446 * Math.pow(t - 60, -0.1332047592)))
+    g = Math.min(255, Math.max(0, 288.1221695283 * Math.pow(t - 60, -0.0755148492)))
   }
+
+  if (t >= 66) {
+    b = 255
+  } else if (t <= 19) {
+    b = 0
+  } else {
+    b = Math.min(255, Math.max(0, 138.5177312231 * Math.log(t - 10) - 305.0447927307))
+  }
+
+  return new THREE.Color(r / 255, g / 255, b / 255)
 }
 
 export function FocusedStar({ system, position, stargates, showOrbits, showOrbitLines, bodyPositionsRef }: FocusedStarProps) {
   const star = system.star
   const luminosity = star?.luminosity ?? 1
-  const starRadius = star?.radius ?? 696340000
+  const starRadius = star?.radius ?? SOLAR_RADIUS_M
+  const starTemperature = star?.temperature ?? 5778
 
   const starWorldPosition = useMemo(() => position.clone(), [position])
   const starColor = useMemo(
-    () => getStarColorFromSpectralClass(star?.spectralClass ?? 'G'),
-    [star?.spectralClass]
+    () => getStarColorFromTemperature(starTemperature),
+    [starTemperature]
   )
 
   useMemo(() => {
     bodyPositionsRef.current['star'] = new THREE.Vector3(0, 0, 0)
     stargates.forEach((sg) => {
       bodyPositionsRef.current[`stargate-${sg.id}`] = new THREE.Vector3(
-        sg.position.x * ORBIT_VISUAL_SCALE,
-        sg.position.y * ORBIT_VISUAL_SCALE,
-        sg.position.z * ORBIT_VISUAL_SCALE
+        sg.position.x * SCENE.ORBIT_SCALE,
+        sg.position.y * SCENE.ORBIT_SCALE,
+        sg.position.z * SCENE.ORBIT_SCALE
       )
     })
   }, [stargates, bodyPositionsRef])
@@ -347,7 +362,7 @@ export function FocusedStar({ system, position, stargates, showOrbits, showOrbit
       {star && (
         <Suspense fallback={
           <mesh>
-            <sphereGeometry args={[SCENE_BASE_RADIUS, 32, 32]} />
+            <sphereGeometry args={[SCENE.BASE_RADIUS, 32, 32]} />
             <meshBasicMaterial color={0xffaa00} />
           </mesh>
         }>
@@ -355,7 +370,7 @@ export function FocusedStar({ system, position, stargates, showOrbits, showOrbit
         </Suspense>
       )}
 
-      {system.planets.slice(0, 8).map((planet) => (
+      {system.planets.map((planet) => (
         <OrbitingPlanet
           key={planet.id}
           planet={planet}

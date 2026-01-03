@@ -1,3 +1,5 @@
+// Shader preset types as they appear in shader-presets.json
+// Note: plasma/shattered planet typeIDs use 'lava' shader preset
 export type PresetType =
   | 'gasgiant'
   | 'terrestrial'
@@ -6,8 +8,6 @@ export type PresetType =
   | 'lava'
   | 'sandstorm'
   | 'thunderstorm'
-  | 'plasma'
-  | 'shattered'
 
 export type ShaderType = 'terrestrial' | 'gasgiant' | 'ice' | 'lava' | 'basic'
 
