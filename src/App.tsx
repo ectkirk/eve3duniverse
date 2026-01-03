@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useUniverseData } from './hooks/useUniverseData'
 import { PLANET_TYPES } from './types/universe'
+import { EVE_COORDINATE_SCALE } from './constants'
 import { Stars } from './components/Stars'
 import { RegionLabels, ccpRound } from './components/RegionLabels'
 import { CameraController } from './components/CameraController'
@@ -21,12 +22,54 @@ export function App() {
   const [showOrbitLines, setShowOrbitLines] = useState(false)
   const [focusedBodyId, setFocusedBodyId] = useState<string | null>(null)
   const bodyPositionsRef = useRef<Record<string, THREE.Vector3>>({})
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<typeof systems>([])
+  const [showSearch, setShowSearch] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
   const handleOrbitExit = useCallback(() => {
     setFocusInfo({ state: 'normal', target: null, dwellProgress: 0 })
     setFocusedBodyId(null)
     bodyPositionsRef.current = {}
   }, [])
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+    debounceRef.current = setTimeout(() => {
+      const lowerQuery = query.toLowerCase()
+      const results = systems
+        .filter((s) => s.name.toLowerCase().includes(lowerQuery))
+        .slice(0, 10)
+      setSearchResults(results)
+    }, 150)
+  }, [systems])
+
+  const handleSystemSelect = useCallback((system: typeof systems[0]) => {
+    const region = regions[system.regionId]
+    const constellation = constellations[system.constellationId]
+    if (!region || !constellation) return
+
+    const scenePosition = new THREE.Vector3(
+      system.position.x * EVE_COORDINATE_SCALE,
+      system.position.y * EVE_COORDINATE_SCALE,
+      system.position.z * EVE_COORDINATE_SCALE
+    )
+
+    setFocusInfo({
+      state: 'locked',
+      target: { system, region, constellation, screenDistance: 0, scenePosition },
+      dwellProgress: 1,
+    })
+    setShowSearch(false)
+    setSearchQuery('')
+    setSearchResults([])
+  }, [regions, constellations])
 
   const orbitTarget = useMemo(() => {
     if (focusInfo.state === 'locked' && focusInfo.target) {
@@ -75,14 +118,34 @@ export function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return
-      if (e.key === '1') setColorMode(0)
+      if (showSearch) {
+        if (e.key === 'Escape') {
+          setShowSearch(false)
+          setSearchQuery('')
+          setSearchResults([])
+        }
+        return
+      }
+      if (e.key === '/') {
+        e.preventDefault()
+        setShowSearch(true)
+        setTimeout(() => searchInputRef.current?.focus(), 0)
+      } else if (e.key === '1') setColorMode(0)
       else if (e.key === '2') setColorMode(1)
       else if (e.key === '3') setColorMode(2)
       else if (e.key.toLowerCase() === 'l') setShowLabels((prev) => !prev)
+      else if (e.key === ' ') {
+        e.preventDefault()
+        if (focusInfo.state === 'focused' && focusInfo.target) {
+          setFocusInfo({ state: 'locked', target: focusInfo.target, dwellProgress: 1 })
+        } else if (focusInfo.state === 'locked') {
+          handleOrbitExit()
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [focusInfo.state, focusInfo.target, handleOrbitExit, showSearch])
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -100,7 +163,7 @@ export function App() {
               regions={regions}
               constellations={constellations}
               onFocusChange={setFocusInfo}
-              enabled={focusInfo.state !== 'locked'}
+              enabled={focusInfo.state !== 'locked' && focusInfo.state !== 'focused'}
             />
           </>
         )}
@@ -136,8 +199,62 @@ export function App() {
           <div>Systems: {systems.length.toLocaleString()}</div>
           <div>Color: {['Star Type', 'Security', 'Region'][colorMode]}</div>
           <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
-            WASD: move | Mouse: look | 1/2/3: color | L: labels | ESC: menu
+            WASD: move | Mouse: look | SPACE: enter/exit | /: search | L: labels
           </div>
+        </div>
+      )}
+
+      {showSearch && (
+        <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 100 }}>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search systems..."
+            style={{
+              width: '300px',
+              padding: '10px 14px',
+              fontSize: '14px',
+              fontFamily: 'monospace',
+              background: 'rgba(0,0,0,0.9)',
+              border: '1px solid #444',
+              borderRadius: '4px',
+              color: '#fff',
+              outline: 'none',
+            }}
+          />
+          {searchResults.length > 0 && (
+            <div style={{
+              marginTop: '4px',
+              background: 'rgba(0,0,0,0.9)',
+              border: '1px solid #444',
+              borderRadius: '4px',
+              maxHeight: '300px',
+              overflowY: 'auto',
+            }}>
+              {searchResults.map((system) => (
+                <div
+                  key={system.id}
+                  onClick={() => handleSystemSelect(system)}
+                  style={{
+                    padding: '8px 14px',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid #333',
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(100,200,255,0.2)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <div style={{ color: '#fff' }}>{system.name}</div>
+                  <div style={{ color: '#888', fontSize: '11px' }}>
+                    {regions[system.regionId]?.name} · {ccpRound(system.securityStatus).toFixed(1)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -164,6 +281,27 @@ export function App() {
               transform="rotate(-90 40 40)"
             />
           </svg>
+        </div>
+      )}
+
+      {focusInfo.state === 'focused' && focusInfo.target && (
+        <div style={{ ...styles.centered, pointerEvents: 'none', textAlign: 'center' }}>
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle
+              cx="40"
+              cy="40"
+              r="35"
+              fill="none"
+              stroke="rgba(100,200,255,0.8)"
+              strokeWidth="2"
+            />
+          </svg>
+          <div style={{ color: '#6cf', fontSize: '12px', fontFamily: 'monospace', marginTop: '8px' }}>
+            SPACE to enter
+          </div>
+          <div style={{ color: '#fff', fontSize: '14px', fontFamily: 'monospace', marginTop: '4px' }}>
+            {focusInfo.target.system.name}
+          </div>
         </div>
       )}
 

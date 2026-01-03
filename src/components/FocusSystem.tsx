@@ -135,8 +135,8 @@ export function FocusSystem({
         onFocusChange({ state: 'dwelling', target: currentTarget.current, dwellProgress: progress })
 
         if (progress >= 1) {
-          state.current = 'locked'
-          onFocusChange({ state: 'locked', target: currentTarget.current, dwellProgress: 1 })
+          state.current = 'focused'
+          onFocusChange({ state: 'focused', target: currentTarget.current, dwellProgress: 1 })
         }
       }
     }
