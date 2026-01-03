@@ -13,6 +13,7 @@ export const SCENE = {
   PLANET_RADIUS_MAX: 0.03,
   STAR_RADIUS_MIN: 0.04,
   STAR_RADIUS_MAX: 0.25,
+  ROTATION_SCALE: 1e-7,
 } as const
 
 export const CAMERA_DEFAULTS = {

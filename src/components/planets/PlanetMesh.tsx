@@ -2,6 +2,7 @@ import { useRef, useMemo, useEffect } from 'react'
 import { useFrame, useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
 import { type ShaderPreset, getShaderType, getTexturePath } from './types'
+import { SCENE } from '../../constants'
 import { createLogger } from '../../utils/logger'
 import { planetVertexShader } from '../../shaders/planetShaders'
 import planetGraphics from '../../data/planet-graphics.json'
@@ -40,10 +41,17 @@ const planetFragmentShader = `
   uniform sampler2D uHeightMap2;
   uniform sampler2D uClouds;
   uniform sampler2D uCloudCap;
+  uniform sampler2D uNormalHeight1;
+  uniform sampler2D uNormalHeight2;
+  uniform sampler2D uLavaNoise;
+  uniform sampler2D uLightning;
   uniform float uHasCityLights;
   uniform float uHasScatter;
   uniform float uHasHeightMap;
   uniform float uHasClouds;
+  uniform float uHasNormalMap;
+  uniform float uHasLavaNoise;
+  uniform float uHasLightning;
   uniform float uTime;
   uniform vec3 uStarPosition;
   uniform vec3 uStarColor;
@@ -55,27 +63,51 @@ const planetFragmentShader = `
   varying vec3 vPosition;
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
+  varying vec3 vTangent;
+  varying vec3 vBitangent;
+
+  vec3 perturbNormal(vec3 normal, vec2 uv) {
+    if (uHasNormalMap < 0.5) return normal;
+
+    float h1 = texture2D(uNormalHeight1, uv).r;
+    float h2 = texture2D(uNormalHeight2, uv).r;
+    float height = mix(h1, h2, 0.5);
+
+    float delta = 0.002;
+    float h1x = texture2D(uNormalHeight1, uv + vec2(delta, 0.0)).r;
+    float h2x = texture2D(uNormalHeight2, uv + vec2(delta, 0.0)).r;
+    float h1y = texture2D(uNormalHeight1, uv + vec2(0.0, delta)).r;
+    float h2y = texture2D(uNormalHeight2, uv + vec2(0.0, delta)).r;
+
+    float dx = mix(h1x, h2x, 0.5) - height;
+    float dy = mix(h1y, h2y, 0.5) - height;
+
+    vec3 bumpNormal = normalize(vec3(-dx * 2.0, -dy * 2.0, 1.0));
+    mat3 TBN = mat3(vTangent, vBitangent, normal);
+    return normalize(TBN * bumpNormal);
+  }
 
   void main() {
     vec3 viewDir = normalize(-vPosition);
-    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 3.0);
+    vec3 normal = normalize(vNormal);
+    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
 
     vec2 animatedUv = vUv;
     float surfaceSpeed = 0.002;
     if (uPlanetType < 0.5) {
-      // Gas giant - swirling bands
       float latitude = vUv.y - 0.5;
       float bandSpeed = surfaceSpeed * (1.0 + abs(latitude) * 2.0);
       animatedUv.x = vUv.x + uTime * bandSpeed * sign(latitude);
       animatedUv.y = vUv.y + sin(vUv.x * 12.0 + uTime * 0.5) * 0.003;
     } else if (uPlanetType > 2.5 && uPlanetType < 3.5) {
-      // Lava - slow crawl with pulse
       animatedUv.x = vUv.x + uTime * surfaceSpeed * 0.3;
     }
 
+    vec3 perturbedNormal = perturbNormal(normal, animatedUv);
+
     vec4 diffuse = texture2D(uDiffuse, animatedUv);
 
-    float gradientSample = dot(vNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+    float gradientSample = dot(perturbedNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
     vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
 
     float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
@@ -89,10 +121,19 @@ const planetFragmentShader = `
       baseColor *= 0.8 + 0.4 * heightBlend;
     }
 
-    // Lava glow pulse - intensity scales with temperature
+    // Lava with 3D noise
     if (uPlanetType > 2.5 && uPlanetType < 3.5) {
       float tempFactor = clamp(uTemperature / 1500.0, 0.5, 2.0);
-      float lavaPulse = 0.85 + 0.15 * tempFactor * sin(uTime * 0.8 + diffuse.r * 6.28);
+
+      float noiseOffset = 0.0;
+      if (uHasLavaNoise > 0.5) {
+        vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * 0.02, uTime * 0.015);
+        float noise = texture2D(uLavaNoise, noiseUv).r;
+        noiseOffset = noise * 0.3 * tempFactor;
+        baseColor += vec3(1.0, 0.3, 0.1) * noise * 0.2 * tempFactor;
+      }
+
+      float lavaPulse = 0.85 + 0.15 * tempFactor * sin(uTime * 0.8 + diffuse.r * 6.28 + noiseOffset);
       baseColor *= lavaPulse;
       baseColor += diffuse.rgb * 0.15 * tempFactor * (0.5 + 0.5 * sin(uTime * 1.2));
     }
@@ -101,9 +142,15 @@ const planetFragmentShader = `
     float NdotL = dot(normalize(vWorldNormal), lightDir);
     float shadow = 0.15 + 0.85 * max(NdotL, 0.0);
 
+    // Apply normal map to lighting
+    if (uHasNormalMap > 0.5) {
+      vec3 worldPerturbedNormal = normalize(mat3(1.0) * perturbedNormal);
+      float bumpLight = max(dot(worldPerturbedNormal, lightDir), 0.0);
+      shadow = 0.15 + 0.85 * mix(max(NdotL, 0.0), bumpLight, 0.5);
+    }
+
     vec3 litColor = baseColor * shadow * uStarColor;
 
-    // Clouds layer
     if (uHasClouds > 0.5) {
       vec2 cloudUv = vUv;
       cloudUv.x += uTime * 0.008;
@@ -131,11 +178,21 @@ const planetFragmentShader = `
       scatter = mix(scatterHue, scatterLight, sunInfluence) * fresnel * 0.8;
     }
 
-    // Thunderstorm lightning
+    // Thunderstorm lightning from texture
     if (uPlanetType > 4.5 && uPlanetType < 5.5) {
-      float lightning = pow(fract(sin(uTime * 15.0 + vUv.x * 50.0) * 43758.5453), 20.0);
-      lightning *= step(0.97, fract(uTime * 0.3 + vUv.y));
-      litColor += vec3(0.8, 0.85, 1.0) * lightning * 2.0;
+      float flash = pow(fract(sin(uTime * 8.0) * 43758.5453), 15.0);
+      flash *= step(0.92, fract(uTime * 0.2 + vUv.y * 0.5));
+
+      if (uHasLightning > 0.5) {
+        vec2 lightningUv = vUv * vec2(2.0, 1.0) + vec2(uTime * 0.1, 0.0);
+        float lightningPattern = texture2D(uLightning, lightningUv).r;
+        float bolt = lightningPattern * flash * 3.0;
+        litColor += vec3(0.7, 0.8, 1.0) * bolt;
+      } else {
+        float lightning = pow(fract(sin(uTime * 15.0 + vUv.x * 50.0) * 43758.5453), 20.0);
+        lightning *= step(0.97, fract(uTime * 0.3 + vUv.y));
+        litColor += vec3(0.8, 0.85, 1.0) * lightning * 2.0;
+      }
     }
 
     gl_FragColor = vec4(litColor + cityGlow + scatter, 1.0);
@@ -157,6 +214,10 @@ interface TexturePathsResult {
   heightMap2Index: number
   cloudsIndex: number
   cloudCapIndex: number
+  normalHeight1Index: number
+  normalHeight2Index: number
+  lavaNoiseIndex: number
+  lightningIndex: number
 }
 
 function getPlanetTypeNum(presetType: string): number {
@@ -220,12 +281,41 @@ function getTexturePathsForPreset(
     paths.push(getTexturePath(tex.CloudCapTexture))
   }
 
-  return { paths, heightMap1Index, heightMap2Index, cloudsIndex, cloudCapIndex }
-}
+  let normalHeight1Index = -1
+  let normalHeight2Index = -1
+  if (tex.NormalHeight1) {
+    normalHeight1Index = paths.length
+    paths.push(getTexturePath(tex.NormalHeight1))
+  }
+  if (tex.NormalHeight2) {
+    normalHeight2Index = paths.length
+    paths.push(getTexturePath(tex.NormalHeight2))
+  }
 
-// Typical EVE rotation rates are ~80000-140000 rad/s
-// We scale this to a reasonable visual rotation speed
-const ROTATION_SCALE = 1e-5
+  let lavaNoiseIndex = -1
+  if (tex.Lava3DNoiseMap) {
+    lavaNoiseIndex = paths.length
+    paths.push(getTexturePath(tex.Lava3DNoiseMap))
+  }
+
+  let lightningIndex = -1
+  if (tex.LightningMap) {
+    lightningIndex = paths.length
+    paths.push(getTexturePath(tex.LightningMap))
+  }
+
+  return {
+    paths,
+    heightMap1Index,
+    heightMap2Index,
+    cloudsIndex,
+    cloudCapIndex,
+    normalHeight1Index,
+    normalHeight2Index,
+    lavaNoiseIndex,
+    lightningIndex,
+  }
+}
 
 export function PlanetMesh({ preset, population, scaledRadius, starPosition, starColor, heightMap1, heightMap2, temperature, rotationRate }: PlanetMeshProps) {
   const presetType = preset.type
@@ -269,6 +359,13 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       uClouds: { value: placeholderTexture },
       uCloudCap: { value: placeholderTexture },
       uHasClouds: { value: 0.0 },
+      uNormalHeight1: { value: placeholderTexture },
+      uNormalHeight2: { value: placeholderTexture },
+      uHasNormalMap: { value: 0.0 },
+      uLavaNoise: { value: placeholderTexture },
+      uHasLavaNoise: { value: 0.0 },
+      uLightning: { value: placeholderTexture },
+      uHasLightning: { value: 0.0 },
       uPlanetType: { value: getPlanetTypeNum(presetType) },
       uTemperature: { value: temperature },
     }
@@ -310,6 +407,36 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       }
     }
 
+    const { normalHeight1Index, normalHeight2Index, lavaNoiseIndex, lightningIndex } = textureResult
+    if (normalHeight1Index >= 0) {
+      const nh1Tex = getTexture(normalHeight1Index)
+      nh1Tex.wrapS = nh1Tex.wrapT = THREE.RepeatWrapping
+      uniforms.uNormalHeight1 = { value: nh1Tex }
+      uniforms.uHasNormalMap = { value: 1.0 }
+
+      if (normalHeight2Index >= 0) {
+        const nh2Tex = getTexture(normalHeight2Index)
+        nh2Tex.wrapS = nh2Tex.wrapT = THREE.RepeatWrapping
+        uniforms.uNormalHeight2 = { value: nh2Tex }
+      } else {
+        uniforms.uNormalHeight2 = { value: nh1Tex }
+      }
+    }
+
+    if (lavaNoiseIndex >= 0) {
+      const lavaNoiseTex = getTexture(lavaNoiseIndex)
+      lavaNoiseTex.wrapS = lavaNoiseTex.wrapT = THREE.RepeatWrapping
+      uniforms.uLavaNoise = { value: lavaNoiseTex }
+      uniforms.uHasLavaNoise = { value: 1.0 }
+    }
+
+    if (lightningIndex >= 0) {
+      const lightningTex = getTexture(lightningIndex)
+      lightningTex.wrapS = lightningTex.wrapT = THREE.RepeatWrapping
+      uniforms.uLightning = { value: lightningTex }
+      uniforms.uHasLightning = { value: 1.0 }
+    }
+
     log.debug(`Creating shader for ${presetType}`)
     return new THREE.ShaderMaterial({
       vertexShader: planetVertexShader,
@@ -322,7 +449,7 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
 
   const rotationSpeed = useMemo(() => {
     if (!rotationRate || rotationRate === 0) return 0.01
-    return rotationRate * ROTATION_SCALE
+    return rotationRate * SCENE.ROTATION_SCALE
   }, [rotationRate])
 
   useFrame(({ clock }) => {
