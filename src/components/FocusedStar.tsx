@@ -144,7 +144,15 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
             <meshBasicMaterial color={0x444444} />
           </mesh>
         }>
-          <PlanetMesh preset={preset} population={planet.population ?? false} scaledRadius={scaledRadius} starPosition={starPosition} starColor={starColor} />
+          <PlanetMesh
+            preset={preset}
+            population={planet.population ?? false}
+            scaledRadius={scaledRadius}
+            starPosition={starPosition}
+            starColor={starColor}
+            heightMap1={planet.heightMap1}
+            heightMap2={planet.heightMap2}
+          />
         </Suspense>
       </group>
     </>
