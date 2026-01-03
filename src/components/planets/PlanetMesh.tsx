@@ -1,23 +1,15 @@
 import { useRef, useMemo, useEffect } from 'react'
 import { useFrame, useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
-import { type ShaderPreset, getShaderType, getTexturePath } from './types'
+import { type ShaderPreset } from './types'
+import { getTexturePathsForPreset, getPlanetTypeNum } from './textureResolver'
 import { SCENE } from '../../constants'
 import { createLogger } from '../../utils/logger'
-import { planetVertexShader } from '../../shaders/planetShaders'
 import { useHeightMapBaker } from '../../hooks/useHeightMapBaker'
-import planetGraphics from '../../data/planet-graphics.json'
+import planetVertexShader from '../../shaders/planet/planetVertex.glsl'
+import planetFragmentShader from '../../shaders/planet/planetFragment.glsl'
 
 const log = createLogger('PlanetMesh')
-
-const graphicsData = planetGraphics as Record<string, string>
-
-function getHeightMapPath(graphicId: number | undefined): string | null {
-  if (!graphicId) return null
-  const path = graphicsData[graphicId.toString()]
-  if (!path || !path.endsWith('.webp')) return null
-  return getTexturePath(path)
-}
 
 interface PlanetMeshProps {
   preset: ShaderPreset
@@ -31,227 +23,6 @@ interface PlanetMeshProps {
   rotationRate: number
 }
 
-const planetFragmentShader = `
-  uniform sampler2D uDiffuse;
-  uniform sampler2D uGradient;
-  uniform sampler2D uPoleMask;
-  uniform sampler2D uCityLight;
-  uniform sampler2D uScatterLight;
-  uniform sampler2D uScatterHue;
-  uniform sampler2D uHeightMap1;
-  uniform sampler2D uHeightMap2;
-  uniform sampler2D uClouds;
-  uniform sampler2D uCloudCap;
-  uniform sampler2D uBakedHeightMap;
-  uniform sampler2D uLavaNoise;
-  uniform sampler2D uLightning;
-  uniform sampler2D uGasGiantMixer;
-  uniform sampler2D uGasGiantNoise;
-  uniform float uHasCityLights;
-  uniform float uHasScatter;
-  uniform float uHasHeightMap;
-  uniform float uHasClouds;
-  uniform float uHasBakedHeightMap;
-  uniform float uHasLavaNoise;
-  uniform float uHasLightning;
-  uniform float uHasGasGiantMixer;
-  uniform float uHasGasGiantNoise;
-  uniform float uTime;
-  uniform vec3 uStarPosition;
-  uniform vec3 uStarColor;
-  uniform float uPlanetType;
-  uniform float uTemperature;
-  uniform vec4 uWindFactors;
-  uniform vec4 uCapColor;
-  uniform vec4 uDistoFactors;
-  uniform vec4 uSaturation;
-
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
-  varying vec3 vTangent;
-  varying vec3 vBitangent;
-
-  vec3 perturbNormal(vec3 normal, vec2 uv) {
-    if (uHasBakedHeightMap < 0.5) return normal;
-
-    float height = texture2D(uBakedHeightMap, uv).r;
-    float delta = 0.002;
-    float hx = texture2D(uBakedHeightMap, uv + vec2(delta, 0.0)).r;
-    float hy = texture2D(uBakedHeightMap, uv + vec2(0.0, delta)).r;
-
-    float dx = hx - height;
-    float dy = hy - height;
-
-    vec3 bumpNormal = normalize(vec3(-dx * 2.0, -dy * 2.0, 1.0));
-    mat3 TBN = mat3(vTangent, vBitangent, normal);
-    return normalize(TBN * bumpNormal);
-  }
-
-  void main() {
-    vec3 viewDir = normalize(-vPosition);
-    vec3 normal = normalize(vNormal);
-    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
-
-    vec2 animatedUv = vUv;
-    float surfaceSpeed = 0.002;
-    if (uPlanetType > 2.5 && uPlanetType < 3.5) {
-      animatedUv.x = vUv.x + uTime * surfaceSpeed * 0.3;
-    }
-
-    vec3 perturbedNormal = perturbNormal(normal, animatedUv);
-    vec4 diffuse = texture2D(uDiffuse, animatedUv);
-    vec3 baseColor;
-
-    if (uPlanetType < 0.5) {
-      float latitude = vUv.y - 0.5;
-      float baseSpeed = uWindFactors.x > 0.0 ? uWindFactors.x : 0.3;
-      float latVariation = uWindFactors.y > 0.0 ? uWindFactors.y : 0.5;
-      float latFactor = latitude * 2.0;
-      float bandSpeed = baseSpeed * surfaceSpeed * (1.0 + abs(latitude) * latVariation * 4.0);
-      vec2 bandUv = vUv;
-      bandUv.x += uTime * bandSpeed * latFactor;
-
-      vec4 pattern = texture2D(uDiffuse, bandUv);
-
-      float mixer = 0.5;
-      if (uHasGasGiantMixer > 0.5) {
-        mixer = texture2D(uGasGiantMixer, bandUv).r;
-      }
-
-      float noise = 0.0;
-      float noiseSpeed = uWindFactors.z > 0.0 ? uWindFactors.z : 0.2;
-      if (uHasGasGiantNoise > 0.5) {
-        vec2 noiseUv = bandUv * 2.0 + vec2(uTime * noiseSpeed * 0.05, 0.0);
-        noise = texture2D(uGasGiantNoise, noiseUv).r;
-        float baseDistortion = uWindFactors.w > 0.0 ? uWindFactors.w : 0.12;
-        float distoScale = uDistoFactors.x > 0.0 ? uDistoFactors.x / 10.0 : 0.4;
-        float distortion = baseDistortion * distoScale;
-        bandUv.y += (noise - 0.5) * distortion * mixer;
-        pattern = texture2D(uDiffuse, bandUv);
-      }
-
-      float gradientSample = pattern.r * mixer + (1.0 - mixer) * pattern.g;
-      vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
-
-      float satBoost = uSaturation.x > 0.0 ? uSaturation.x : 1.0;
-      float gray = dot(gradientColor, vec3(0.299, 0.587, 0.114));
-      gradientColor = mix(vec3(gray), gradientColor, satBoost);
-
-      float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
-      float poleBlend = 1.0 - poleMask;
-      float capTint = uCapColor.x > 0.0 ? uCapColor.x : 0.0;
-      vec3 polarTint = vec3(1.0 + capTint * poleBlend * 4.0, 1.0 - capTint * poleBlend, 1.0 - capTint * poleBlend);
-
-      float intensity = 0.8 + 0.4 * pattern.a;
-      baseColor = gradientColor * intensity * polarTint;
-      baseColor *= 0.7 + 0.3 * poleMask;
-
-      if (uHasGasGiantNoise > 0.5) {
-        baseColor += gradientColor * noise * 0.1;
-      }
-
-      if (uHasHeightMap > 0.5) {
-        vec3 h1 = texture2D(uHeightMap1, bandUv * 0.5).rgb;
-        vec3 h2 = texture2D(uHeightMap2, bandUv * 0.5 + vec2(0.25, 0.0)).rgb;
-        vec3 heightBlend = mix(h1, h2, mixer);
-        baseColor *= 0.85 + 0.3 * dot(heightBlend, vec3(0.333));
-      }
-    } else {
-      float gradientSample = dot(perturbedNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
-      vec3 gradientColor = texture2D(uGradient, vec2(gradientSample, 0.5)).rgb;
-
-      float poleMask = texture2D(uPoleMask, vec2(0.5, abs(vUv.y - 0.5) * 2.0)).r;
-
-      baseColor = diffuse.rgb * gradientColor * 1.5 * (0.7 + 0.3 * poleMask);
-
-      if (uHasHeightMap > 0.5) {
-        float h1 = texture2D(uHeightMap1, animatedUv).r;
-        float h2 = texture2D(uHeightMap2, animatedUv).r;
-        float heightBlend = mix(h1, h2, 0.5);
-        baseColor *= 0.8 + 0.4 * heightBlend;
-      }
-    }
-
-    // Lava with 3D noise
-    if (uPlanetType > 2.5 && uPlanetType < 3.5) {
-      float tempFactor = clamp(uTemperature / 1500.0, 0.5, 2.0);
-
-      float noiseOffset = 0.0;
-      if (uHasLavaNoise > 0.5) {
-        vec2 noiseUv = animatedUv * 2.0 + vec2(uTime * 0.02, uTime * 0.015);
-        float noise = texture2D(uLavaNoise, noiseUv).r;
-        noiseOffset = noise * 0.3 * tempFactor;
-        baseColor += vec3(1.0, 0.3, 0.1) * noise * 0.2 * tempFactor;
-      }
-
-      float lavaPulse = 0.85 + 0.15 * tempFactor * sin(uTime * 0.8 + diffuse.r * 6.28 + noiseOffset);
-      baseColor *= lavaPulse;
-      baseColor += diffuse.rgb * 0.15 * tempFactor * (0.5 + 0.5 * sin(uTime * 1.2));
-    }
-
-    vec3 lightDir = normalize(uStarPosition - vWorldPosition);
-    float NdotL = dot(normalize(vWorldNormal), lightDir);
-    float shadow = 0.15 + 0.85 * max(NdotL, 0.0);
-
-    if (uHasBakedHeightMap > 0.5) {
-      vec3 worldPerturbedNormal = normalize(mat3(1.0) * perturbedNormal);
-      float bumpLight = max(dot(worldPerturbedNormal, lightDir), 0.0);
-      shadow = 0.15 + 0.85 * mix(max(NdotL, 0.0), bumpLight, 0.5);
-    }
-
-    vec3 litColor = baseColor * shadow * uStarColor;
-
-    if (uHasClouds > 0.5) {
-      vec2 cloudUv = vUv;
-      cloudUv.x += uTime * 0.008;
-      vec4 clouds = texture2D(uClouds, cloudUv);
-
-      vec2 capUv = vUv;
-      capUv.x += uTime * 0.004;
-      float capMask = smoothstep(0.3, 0.0, abs(vUv.y - 0.5));
-      vec4 cloudCap = texture2D(uCloudCap, capUv) * (1.0 - capMask);
-
-      float cloudAlpha = max(clouds.a, cloudCap.a) * 0.7;
-      vec3 cloudColor = mix(clouds.rgb, cloudCap.rgb, cloudCap.a);
-      cloudColor *= shadow * uStarColor;
-      litColor = mix(litColor, cloudColor, cloudAlpha);
-    }
-
-    float nightMask = smoothstep(0.0, -0.15, NdotL) * uHasCityLights;
-    vec3 cityGlow = texture2D(uCityLight, vUv).rgb * nightMask * 2.0;
-
-    vec3 scatter = vec3(0.0);
-    if (uHasScatter > 0.5) {
-      vec3 scatterLight = texture2D(uScatterLight, vec2(fresnel, 0.5)).rgb;
-      vec3 scatterHue = texture2D(uScatterHue, vec2(fresnel, 0.5)).rgb;
-      float sunInfluence = max(0.0, dot(lightDir, viewDir));
-      scatter = mix(scatterHue, scatterLight, sunInfluence) * fresnel * 0.8;
-    }
-
-    // Thunderstorm lightning from texture
-    if (uPlanetType > 4.5 && uPlanetType < 5.5) {
-      float flash = pow(fract(sin(uTime * 8.0) * 43758.5453), 15.0);
-      flash *= step(0.92, fract(uTime * 0.2 + vUv.y * 0.5));
-
-      if (uHasLightning > 0.5) {
-        vec2 lightningUv = vUv * vec2(2.0, 1.0) + vec2(uTime * 0.1, 0.0);
-        float lightningPattern = texture2D(uLightning, lightningUv).r;
-        float bolt = lightningPattern * flash * 3.0;
-        litColor += vec3(0.7, 0.8, 1.0) * bolt;
-      } else {
-        float lightning = pow(fract(sin(uTime * 15.0 + vUv.x * 50.0) * 43758.5453), 20.0);
-        lightning *= step(0.97, fract(uTime * 0.3 + vUv.y));
-        litColor += vec3(0.8, 0.85, 1.0) * lightning * 2.0;
-      }
-    }
-
-    gl_FragColor = vec4(litColor + cityGlow + scatter, 1.0);
-  }
-`
-
 function createPlaceholderTexture(): THREE.Texture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = 2
@@ -261,133 +32,17 @@ function createPlaceholderTexture(): THREE.Texture {
   return new THREE.CanvasTexture(canvas)
 }
 
-interface TexturePathsResult {
-  paths: string[]
-  heightMap1Index: number
-  heightMap2Index: number
-  cloudsIndex: number
-  cloudCapIndex: number
-  normalHeight1Index: number
-  normalHeight2Index: number
-  lavaNoiseIndex: number
-  lightningIndex: number
-  gasGiantMixerIndex: number
-  gasGiantNoiseIndex: number
-}
-
-function getPlanetTypeNum(presetType: string): number {
-  switch (presetType) {
-    case 'gasgiant': return 0
-    case 'terrestrial': return 1
-    case 'ocean': return 2
-    case 'lava': return 3
-    case 'ice': return 4
-    case 'thunderstorm': return 5
-    case 'sandstorm': return 6
-    default: return 1
-  }
-}
-
-function getTexturePathsForPreset(
-  preset: ShaderPreset,
-  heightMap1Id?: number,
-  heightMap2Id?: number
-): TexturePathsResult {
-  const paths: string[] = []
-  const tex = preset.textures
-  const shaderType = getShaderType(preset.type)
-
-  if (shaderType === 'gasgiant') {
-    if (tex.DistortionMap) paths.push(getTexturePath(tex.DistortionMap))
-    else if (tex.FillTexture) paths.push(getTexturePath(tex.FillTexture))
-  } else {
-    if (tex.FillTexture) paths.push(getTexturePath(tex.FillTexture))
-    else if (tex.CloudsTexture) paths.push(getTexturePath(tex.CloudsTexture))
-  }
-
-  if (tex.ColorGradientMap) paths.push(getTexturePath(tex.ColorGradientMap))
-  if (tex.PolesGradient) paths.push(getTexturePath(tex.PolesGradient))
-  else if (tex.PolesMaskMap) paths.push(getTexturePath(tex.PolesMaskMap))
-
-  let gasGiantMixerIndex = -1
-  let gasGiantNoiseIndex = -1
-  if (shaderType === 'gasgiant') {
-    if (tex.HeightMap) {
-      gasGiantMixerIndex = paths.length
-      paths.push(getTexturePath(tex.HeightMap))
-    }
-    if (tex.NoiseMap) {
-      gasGiantNoiseIndex = paths.length
-      paths.push(getTexturePath(tex.NoiseMap))
-    }
-  }
-  if (tex.CityLight) paths.push(getTexturePath(tex.CityLight))
-  if (tex.GroundScattering1) paths.push(getTexturePath(tex.GroundScattering1))
-  if (tex.GroundScattering2) paths.push(getTexturePath(tex.GroundScattering2))
-
-  let heightMap1Index = -1
-  let heightMap2Index = -1
-  const h1Path = getHeightMapPath(heightMap1Id)
-  const h2Path = getHeightMapPath(heightMap2Id)
-  if (h1Path) {
-    heightMap1Index = paths.length
-    paths.push(h1Path)
-  }
-  if (h2Path) {
-    heightMap2Index = paths.length
-    paths.push(h2Path)
-  }
-
-  let cloudsIndex = -1
-  let cloudCapIndex = -1
-  if (tex.CloudsTexture && shaderType !== 'gasgiant') {
-    cloudsIndex = paths.length
-    paths.push(getTexturePath(tex.CloudsTexture))
-  }
-  if (tex.CloudCapTexture && shaderType !== 'gasgiant') {
-    cloudCapIndex = paths.length
-    paths.push(getTexturePath(tex.CloudCapTexture))
-  }
-
-  let normalHeight1Index = -1
-  let normalHeight2Index = -1
-  if (tex.NormalHeight1) {
-    normalHeight1Index = paths.length
-    paths.push(getTexturePath(tex.NormalHeight1))
-  }
-  if (tex.NormalHeight2) {
-    normalHeight2Index = paths.length
-    paths.push(getTexturePath(tex.NormalHeight2))
-  }
-
-  let lavaNoiseIndex = -1
-  if (tex.Lava3DNoiseMap) {
-    lavaNoiseIndex = paths.length
-    paths.push(getTexturePath(tex.Lava3DNoiseMap))
-  }
-
-  let lightningIndex = -1
-  if (tex.LightningMap) {
-    lightningIndex = paths.length
-    paths.push(getTexturePath(tex.LightningMap))
-  }
-
-  return {
-    paths,
-    heightMap1Index,
-    heightMap2Index,
-    cloudsIndex,
-    cloudCapIndex,
-    normalHeight1Index,
-    normalHeight2Index,
-    lavaNoiseIndex,
-    lightningIndex,
-    gasGiantMixerIndex,
-    gasGiantNoiseIndex,
-  }
-}
-
-export function PlanetMesh({ preset, population, scaledRadius, starPosition, starColor, heightMap1, heightMap2, temperature, rotationRate }: PlanetMeshProps) {
+export function PlanetMesh({
+  preset,
+  population,
+  scaledRadius,
+  starPosition,
+  starColor,
+  heightMap1,
+  heightMap2,
+  temperature,
+  rotationRate,
+}: PlanetMeshProps) {
   const presetType = preset.type
 
   const textureResult = useMemo(

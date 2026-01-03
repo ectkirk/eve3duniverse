@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
-import { type ShaderPreset, getTexturePath } from './types'
-import { atmosphereVertexShader, atmosphereFragmentShader } from '../../shaders/planetShaders'
+import { type ShaderPreset, getTexturePath, getAtmosphereParams } from './types'
+import atmosphereVertexShader from '../../shaders/planet/atmosphereVertex.glsl'
+import atmosphereFragmentShader from '../../shaders/planet/atmosphereFragment.glsl'
 
 interface AtmosphereMeshProps {
   preset: ShaderPreset
@@ -20,18 +21,6 @@ function createPlaceholderTexture(): THREE.Texture {
   ctx.fillStyle = '#4488ff'
   ctx.fillRect(0, 0, 2, 2)
   return new THREE.CanvasTexture(canvas)
-}
-
-const DEFAULT_ATMOSPHERE_COLOR: [number, number, number, number] = [0.4, 0.6, 1.0, 1.0]
-
-const ATMOSPHERE_COLORS: Record<string, [number, number, number, number]> = {
-  terrestrial: [0.4, 0.6, 1.0, 1.0],
-  ocean: [0.3, 0.5, 0.9, 1.0],
-  ice: [0.5, 0.7, 1.0, 1.0],
-  lava: [1.0, 0.3, 0.1, 1.0],
-  gasgiant: [0.6, 0.5, 0.4, 1.0],
-  sandstorm: [0.8, 0.6, 0.3, 1.0],
-  thunderstorm: [0.4, 0.4, 0.6, 1.0],
 }
 
 export function AtmosphereMesh({
@@ -55,8 +44,7 @@ export function AtmosphereMesh({
 
   const textures = texturePaths ? useLoader(THREE.TextureLoader, texturePaths) : null
 
-  const atmosphereColor = ATMOSPHERE_COLORS[preset.type] ?? DEFAULT_ATMOSPHERE_COLOR
-  const scatteringFactors: [number, number, number, number] = [1.5, 1.0, 0.0, 0.0]
+  const params = getAtmosphereParams(preset)
 
   const material = useMemo(() => {
     const scatterLight = textures?.[0] ?? placeholderTexture
@@ -70,15 +58,16 @@ export function AtmosphereMesh({
         uScatterHue: { value: scatterHue },
         uStarPosition: { value: starPosition },
         uStarColor: { value: starColor },
-        uAtmosphereColor: { value: new THREE.Vector4(atmosphereColor[0], atmosphereColor[1], atmosphereColor[2], atmosphereColor[3]) },
-        uScatteringFactors: { value: new THREE.Vector4(scatteringFactors[0], scatteringFactors[1], scatteringFactors[2], scatteringFactors[3]) },
+        uAtmosphereFactors: { value: new THREE.Vector4(...params.atmosphereFactors) },
+        uScatteringFactors: { value: new THREE.Vector4(...params.scatteringFactors) },
+        uWavelengths: { value: new THREE.Vector3(...params.wavelengths) },
       },
       transparent: true,
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
       depthWrite: false,
     })
-  }, [textures, starPosition, starColor, atmosphereColor, scatteringFactors, placeholderTexture])
+  }, [textures, starPosition, starColor, params, placeholderTexture])
 
   const atmosphereRadius = planetRadius * ATMOSPHERE_SCALE
 

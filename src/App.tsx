@@ -26,7 +26,7 @@ export function App() {
   const [searchResults, setSearchResults] = useState<typeof systems>([])
   const [showSearch, setShowSearch] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const handleOrbitExit = useCallback(() => {
     setFocusInfo({ state: 'normal', target: null, dwellProgress: 0 })

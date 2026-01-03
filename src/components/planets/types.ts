@@ -26,6 +26,67 @@ export interface ShaderPresetParameters {
   MaskParams0?: number[]
   MaskParams1?: number[]
   Geometry?: number[]
+  // Atmosphere parameters (from EVE .black files)
+  AtmosphereFactors?: [number, number, number, number]   // RGB color + alpha
+  ScatteringFactors?: [number, number, number, number]   // Kr, Km, ESun, intensity
+  Wavelengths?: [number, number, number]                 // RGB wavelengths in micrometers
+}
+
+// Default atmosphere parameters by planet type (fallback when not in preset)
+export interface AtmosphereParams {
+  atmosphereFactors: [number, number, number, number]
+  scatteringFactors: [number, number, number, number]
+  wavelengths: [number, number, number]
+}
+
+export const DEFAULT_ATMOSPHERE_PARAMS: AtmosphereParams = {
+  atmosphereFactors: [0.545, 0.604, 0.651, 1.0],
+  scatteringFactors: [1.0, 1.0, 1.0, 1.5],
+  wavelengths: [0.650, 0.570, 0.475],
+}
+
+export const ATMOSPHERE_PARAMS_BY_TYPE: Record<string, AtmosphereParams> = {
+  standard: DEFAULT_ATMOSPHERE_PARAMS,
+  terrestrial: DEFAULT_ATMOSPHERE_PARAMS,
+  ocean: DEFAULT_ATMOSPHERE_PARAMS,
+  gasgiant: DEFAULT_ATMOSPHERE_PARAMS,
+  ice: {
+    atmosphereFactors: [0.498, 0.498, 0.498, 1.0],
+    scatteringFactors: [0.569, 0.663, 0.749, 1.5],
+    wavelengths: [0.650, 0.570, 0.475],
+  },
+  lava: {
+    atmosphereFactors: [0.902, 0.620, 0.137, 1.0],
+    scatteringFactors: [0.733, 0.714, 0.639, 1.5],
+    wavelengths: [0.600, 0.550, 0.500],
+  },
+  plasma: {
+    atmosphereFactors: [0.016, 0.329, 0.710, 1.0],
+    scatteringFactors: [0.733, 0.714, 0.639, 1.5],
+    wavelengths: [0.580, 0.530, 0.470],
+  },
+  sandstorm: {
+    atmosphereFactors: [0.9, 0.85, 0.75, 1.0],
+    scatteringFactors: [1.0, 1.0, 1.0, 1.5],
+    wavelengths: [0.600, 0.580, 0.560],
+  },
+  thunderstorm: {
+    atmosphereFactors: [0.6, 0.6, 0.7, 1.0],
+    scatteringFactors: [1.0, 1.0, 1.0, 1.5],
+    wavelengths: [0.650, 0.570, 0.475],
+  },
+}
+
+export function getAtmosphereParams(preset: ShaderPreset): AtmosphereParams {
+  const params = preset.parameters
+  if (params?.AtmosphereFactors && params?.ScatteringFactors && params?.Wavelengths) {
+    return {
+      atmosphereFactors: params.AtmosphereFactors,
+      scatteringFactors: params.ScatteringFactors,
+      wavelengths: params.Wavelengths,
+    }
+  }
+  return ATMOSPHERE_PARAMS_BY_TYPE[preset.type] ?? DEFAULT_ATMOSPHERE_PARAMS
 }
 
 export interface ShaderPreset {
