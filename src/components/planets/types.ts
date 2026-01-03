@@ -1,7 +1,13 @@
-import atmospherePresetsData from '../../data/atmosphere-presets.json'
+import {
+  ATMOSPHERE,
+  ATMOSPHERE_SCALES,
+  ATMOSPHERE_PARAMS,
+} from '../../constants/planets'
 
-// Shader preset types as they appear in shader-presets.json
-// Note: plasma/shattered planet typeIDs use 'lava' shader preset
+/**
+ * Shader preset types as they appear in shader-presets.json
+ * Note: plasma/shattered use 'lava' in presets but get different type IDs
+ */
 export type PresetType =
   | 'gasgiant'
   | 'terrestrial'
@@ -10,6 +16,8 @@ export type PresetType =
   | 'lava'
   | 'sandstorm'
   | 'thunderstorm'
+  | 'plasma'
+  | 'shattered'
 
 export type ShaderType = 'terrestrial' | 'gasgiant' | 'ice' | 'lava' | 'basic'
 
@@ -28,77 +36,80 @@ export interface ShaderPresetParameters {
   MaskParams0?: number[]
   MaskParams1?: number[]
   Geometry?: number[]
-  // Atmosphere parameters (from EVE .black files)
-  AtmosphereFactors?: [number, number, number, number]   // RGB color + alpha
-  ScatteringFactors?: [number, number, number, number]   // Kr, Km, ESun, intensity
-  Wavelengths?: [number, number, number]                 // RGB wavelengths in micrometers
+  AtmosphereFactors?: [number, number, number, number]
+  ScatteringFactors?: [number, number, number, number]
+  Wavelengths?: [number, number, number]
 }
 
-// Default atmosphere parameters by planet type (fallback when not in preset)
 export interface AtmosphereParams {
-  atmosphereFactors: [number, number, number, number]
-  scatteringFactors: [number, number, number, number]
-  wavelengths: [number, number, number]
+  atmosphereFactors: readonly [number, number, number, number]
+  scatteringFactors: readonly [number, number, number, number]
+  wavelengths: readonly [number, number, number]
   scale: number
 }
 
-type AtmospherePresetData = {
-  maxVertexScale?: number
-  ScatteringFactors?: number[]
-  wavelengths?: number[]
-  AtmosphereColor?: number[]
-}
-const atmospherePresets = atmospherePresetsData as Record<string, AtmospherePresetData>
-
-const DEFAULT_SCALE = 1.025
-
 export const DEFAULT_ATMOSPHERE_PARAMS: AtmosphereParams = {
-  atmosphereFactors: [0.545, 0.604, 0.651, 1.0],
-  scatteringFactors: [1.0, 1.0, 1.0, 1.5],
-  wavelengths: [0.650, 0.570, 0.475],
-  scale: DEFAULT_SCALE,
+  atmosphereFactors: ATMOSPHERE_PARAMS.standard.atmosphereFactors,
+  scatteringFactors: ATMOSPHERE_PARAMS.standard.scatteringFactors,
+  wavelengths: ATMOSPHERE_PARAMS.standard.wavelengths,
+  scale: ATMOSPHERE.DEFAULT_SCALE,
 }
 
 export const ATMOSPHERE_PARAMS_BY_TYPE: Record<string, AtmosphereParams> = {
   standard: DEFAULT_ATMOSPHERE_PARAMS,
   terrestrial: {
-    ...DEFAULT_ATMOSPHERE_PARAMS,
-    scale: atmospherePresets.terrestrial?.maxVertexScale ?? DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.terrestrial.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.terrestrial.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.terrestrial.wavelengths,
+    scale: ATMOSPHERE_SCALES.terrestrial ?? ATMOSPHERE.DEFAULT_SCALE,
   },
   ocean: {
-    ...DEFAULT_ATMOSPHERE_PARAMS,
-    scale: atmospherePresets.ocean?.maxVertexScale ?? DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.ocean.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.ocean.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.ocean.wavelengths,
+    scale: ATMOSPHERE_SCALES.ocean ?? ATMOSPHERE.DEFAULT_SCALE,
   },
-  gasgiant: DEFAULT_ATMOSPHERE_PARAMS,
+  gasgiant: {
+    atmosphereFactors: ATMOSPHERE_PARAMS.gasgiant.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.gasgiant.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.gasgiant.wavelengths,
+    scale: ATMOSPHERE_SCALES.gasgiant ?? ATMOSPHERE.DEFAULT_SCALE,
+  },
   ice: {
-    atmosphereFactors: [0.498, 0.498, 0.498, 1.0],
-    scatteringFactors: [0.569, 0.663, 0.749, 1.5],
-    wavelengths: [0.650, 0.570, 0.475],
-    scale: atmospherePresets.ice?.maxVertexScale ?? DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.ice.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.ice.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.ice.wavelengths,
+    scale: ATMOSPHERE_SCALES.ice ?? ATMOSPHERE.DEFAULT_SCALE,
   },
   lava: {
-    atmosphereFactors: [0.902, 0.620, 0.137, 1.0],
-    scatteringFactors: [0.733, 0.714, 0.639, 1.5],
-    wavelengths: [0.600, 0.550, 0.500],
-    scale: atmospherePresets.lava?.maxVertexScale ?? DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.lava.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.lava.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.lava.wavelengths,
+    scale: ATMOSPHERE_SCALES.lava ?? ATMOSPHERE.DEFAULT_SCALE,
   },
   plasma: {
-    atmosphereFactors: [0.016, 0.329, 0.710, 1.0],
-    scatteringFactors: [0.733, 0.714, 0.639, 1.5],
-    wavelengths: [0.580, 0.530, 0.470],
-    scale: DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.plasma.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.plasma.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.plasma.wavelengths,
+    scale: ATMOSPHERE_SCALES.plasma ?? ATMOSPHERE.DEFAULT_SCALE,
   },
   sandstorm: {
-    atmosphereFactors: [0.9, 0.85, 0.75, 1.0],
-    scatteringFactors: [1.0, 1.0, 1.0, 1.5],
-    wavelengths: [0.600, 0.580, 0.560],
-    scale: DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.sandstorm.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.sandstorm.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.sandstorm.wavelengths,
+    scale: ATMOSPHERE_SCALES.sandstorm ?? ATMOSPHERE.DEFAULT_SCALE,
   },
   thunderstorm: {
-    atmosphereFactors: [0.6, 0.6, 0.7, 1.0],
-    scatteringFactors: [1.0, 1.0, 1.0, 1.5],
-    wavelengths: [0.650, 0.570, 0.475],
-    scale: DEFAULT_SCALE,
+    atmosphereFactors: ATMOSPHERE_PARAMS.thunderstorm.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.thunderstorm.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.thunderstorm.wavelengths,
+    scale: ATMOSPHERE_SCALES.thunderstorm ?? ATMOSPHERE.DEFAULT_SCALE,
+  },
+  shattered: {
+    atmosphereFactors: ATMOSPHERE_PARAMS.lava.atmosphereFactors,
+    scatteringFactors: ATMOSPHERE_PARAMS.lava.scatteringFactors,
+    wavelengths: ATMOSPHERE_PARAMS.lava.wavelengths,
+    scale: ATMOSPHERE_SCALES.lava ?? ATMOSPHERE.DEFAULT_SCALE,
   },
 }
 
@@ -140,6 +151,8 @@ export function getShaderType(presetType: PresetType): ShaderType {
     case 'ice':
       return 'ice'
     case 'lava':
+    case 'plasma':
+    case 'shattered':
       return 'lava'
     default:
       return 'basic'

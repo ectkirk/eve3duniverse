@@ -1,4 +1,5 @@
 import { type ShaderPreset, getShaderType, getTexturePath } from './types'
+import { PLANET_TYPE } from '../../constants/planets'
 import planetGraphics from '../../data/planet-graphics.json'
 
 const graphicsData = planetGraphics as Record<string, string>
@@ -169,15 +170,32 @@ export function getTexturePathsForPreset(
   }
 }
 
+/**
+ * Get planet type ID for shader branching
+ * Maps preset type string to numeric ID used in fragment shader
+ * Source: src/constants/planets.ts PLANET_TYPE
+ */
 export function getPlanetTypeNum(presetType: string): number {
   switch (presetType) {
-    case 'gasgiant': return 0
-    case 'terrestrial': return 1
-    case 'ocean': return 2
-    case 'lava': return 3
-    case 'ice': return 4
-    case 'thunderstorm': return 5
-    case 'sandstorm': return 6
-    default: return 1
+    case 'gasgiant':
+      return PLANET_TYPE.GAS_GIANT
+    case 'terrestrial':
+      return PLANET_TYPE.TERRESTRIAL
+    case 'ocean':
+      return PLANET_TYPE.OCEAN
+    case 'lava':
+      return PLANET_TYPE.LAVA
+    case 'ice':
+      return PLANET_TYPE.ICE
+    case 'thunderstorm':
+      return PLANET_TYPE.THUNDERSTORM
+    case 'sandstorm':
+      return PLANET_TYPE.SANDSTORM
+    case 'plasma':
+      return PLANET_TYPE.PLASMA
+    case 'shattered':
+      return PLANET_TYPE.SHATTERED
+    default:
+      return PLANET_TYPE.TERRESTRIAL
   }
 }

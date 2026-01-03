@@ -4,6 +4,14 @@ import * as THREE from 'three'
 import { type ShaderPreset } from './types'
 import { getTexturePathsForPreset, getPlanetTypeNum } from './textureResolver'
 import { SCENE } from '../../constants'
+import {
+  LIGHTING,
+  ANIMATION,
+  GAS_GIANT,
+  LAVA,
+  THUNDERSTORM,
+  PLASMA,
+} from '../../constants/planets'
 import { createLogger } from '../../utils/logger'
 import { useHeightMapBaker } from '../../hooks/useHeightMapBaker'
 import planetVertexShader from '../../shaders/planet/planetVertex.glsl'
@@ -71,40 +79,47 @@ export function PlanetMesh({
     diffuseTex.wrapS = diffuseTex.wrapT = THREE.RepeatWrapping
 
     const uniforms: Record<string, { value: unknown }> = {
+      // Dynamic uniforms
       uTime: { value: 0 },
       uStarPosition: { value: starPosition },
       uStarColor: { value: starColor },
+      uPlanetType: { value: getPlanetTypeNum(presetType) },
+      uTemperature: { value: temperature },
+
+      // Texture samplers
       uDiffuse: { value: diffuseTex },
       uGradient: { value: gradientIndex >= 0 ? getTexture(gradientIndex) : placeholderTexture },
       uPoleMask: { value: poleMaskIndex >= 0 ? getTexture(poleMaskIndex) : placeholderTexture },
       uCityLight: { value: placeholderTexture },
-      uHasCityLights: { value: 0.0 },
       uScatterLight: { value: placeholderTexture },
       uScatterHue: { value: placeholderTexture },
-      uHasScatter: { value: 0.0 },
       uHeightMap1: { value: placeholderTexture },
       uHeightMap2: { value: placeholderTexture },
-      uHasHeightMap: { value: 0.0 },
       uClouds: { value: placeholderTexture },
       uCloudCap: { value: placeholderTexture },
-      uHasClouds: { value: 0.0 },
       uBakedHeightMap: { value: placeholderTexture },
-      uHasBakedHeightMap: { value: 0.0 },
       uLavaNoise: { value: placeholderTexture },
-      uHasLavaNoise: { value: 0.0 },
       uLightning: { value: placeholderTexture },
-      uHasLightning: { value: 0.0 },
       uGasGiantMixer: { value: placeholderTexture },
       uGasGiantNoise: { value: placeholderTexture },
+
+      // Feature flags
+      uHasCityLights: { value: 0.0 },
+      uHasScatter: { value: 0.0 },
+      uHasHeightMap: { value: 0.0 },
+      uHasClouds: { value: 0.0 },
+      uHasBakedHeightMap: { value: 0.0 },
+      uHasLavaNoise: { value: 0.0 },
+      uHasLightning: { value: 0.0 },
       uHasGasGiantMixer: { value: 0.0 },
       uHasGasGiantNoise: { value: 0.0 },
-      uPlanetType: { value: getPlanetTypeNum(presetType) },
-      uTemperature: { value: temperature },
+
+      // Preset parameters (from shader-presets.json)
       uWindFactors: { value: new THREE.Vector4(
-        preset.parameters?.WindFactors?.[0] ?? 0.3,
-        preset.parameters?.WindFactors?.[1] ?? 0.5,
-        preset.parameters?.WindFactors?.[2] ?? 0.2,
-        preset.parameters?.WindFactors?.[3] ?? 0.12
+        preset.parameters?.WindFactors?.[0] ?? GAS_GIANT.DEFAULT_WIND_FACTORS[0],
+        preset.parameters?.WindFactors?.[1] ?? GAS_GIANT.DEFAULT_WIND_FACTORS[1],
+        preset.parameters?.WindFactors?.[2] ?? GAS_GIANT.DEFAULT_WIND_FACTORS[2],
+        preset.parameters?.WindFactors?.[3] ?? GAS_GIANT.DEFAULT_WIND_FACTORS[3]
       ) },
       uCapColor: { value: new THREE.Vector4(
         preset.parameters?.CapColor?.[0] ?? 0.0,
@@ -113,17 +128,81 @@ export function PlanetMesh({
         preset.parameters?.CapColor?.[3] ?? 0.0
       ) },
       uDistoFactors: { value: new THREE.Vector4(
-        preset.parameters?.DistoFactors?.[0] ?? 4.0,
-        preset.parameters?.DistoFactors?.[1] ?? 0.0,
-        preset.parameters?.DistoFactors?.[2] ?? 0.0,
-        preset.parameters?.DistoFactors?.[3] ?? 0.0
+        preset.parameters?.DistoFactors?.[0] ?? GAS_GIANT.DEFAULT_DISTO_FACTORS[0],
+        preset.parameters?.DistoFactors?.[1] ?? GAS_GIANT.DEFAULT_DISTO_FACTORS[1],
+        preset.parameters?.DistoFactors?.[2] ?? GAS_GIANT.DEFAULT_DISTO_FACTORS[2],
+        preset.parameters?.DistoFactors?.[3] ?? GAS_GIANT.DEFAULT_DISTO_FACTORS[3]
       ) },
       uSaturation: { value: new THREE.Vector4(
-        preset.parameters?.Saturation?.[0] ?? 1.0,
-        preset.parameters?.Saturation?.[1] ?? 0.0,
-        preset.parameters?.Saturation?.[2] ?? 0.0,
-        preset.parameters?.Saturation?.[3] ?? 0.0
+        preset.parameters?.Saturation?.[0] ?? GAS_GIANT.DEFAULT_SATURATION[0],
+        preset.parameters?.Saturation?.[1] ?? GAS_GIANT.DEFAULT_SATURATION[1],
+        preset.parameters?.Saturation?.[2] ?? GAS_GIANT.DEFAULT_SATURATION[2],
+        preset.parameters?.Saturation?.[3] ?? GAS_GIANT.DEFAULT_SATURATION[3]
       ) },
+
+      // LIGHTING constants (from src/constants/planets.ts)
+      uShadowFloor: { value: LIGHTING.SHADOW_FLOOR },
+      uShadowRange: { value: LIGHTING.SHADOW_RANGE },
+      uFresnelPower: { value: LIGHTING.FRESNEL_POWER },
+      uNightThreshold: { value: LIGHTING.NIGHT_THRESHOLD },
+      uCityGlowIntensity: { value: LIGHTING.CITY_GLOW_INTENSITY },
+      uCloudAlpha: { value: LIGHTING.CLOUD_ALPHA },
+      uScatterStrength: { value: LIGHTING.SCATTER_STRENGTH },
+      uHeightSampleDelta: { value: LIGHTING.HEIGHT_SAMPLE_DELTA },
+      uNormalStrength: { value: LIGHTING.NORMAL_STRENGTH },
+
+      // ANIMATION constants
+      uSurfaceSpeed: { value: ANIMATION.SURFACE_SPEED },
+      uCloudSpeed: { value: ANIMATION.CLOUD_SPEED },
+      uCloudCapSpeed: { value: ANIMATION.CLOUD_CAP_SPEED },
+
+      // GAS_GIANT constants
+      uLatFactorScale: { value: GAS_GIANT.LAT_FACTOR_SCALE },
+      uLatVariationScale: { value: GAS_GIANT.LAT_VARIATION_SCALE },
+      uMixerDefault: { value: GAS_GIANT.MIXER_DEFAULT },
+      uPatternIntensityBase: { value: GAS_GIANT.PATTERN_INTENSITY_BASE },
+      uPatternIntensityRange: { value: GAS_GIANT.PATTERN_INTENSITY_RANGE },
+      uPoleDarkenBase: { value: GAS_GIANT.POLE_DARKEN_BASE },
+      uPoleDarkenRange: { value: GAS_GIANT.POLE_DARKEN_RANGE },
+      uCapTintScale: { value: GAS_GIANT.CAP_TINT_SCALE },
+      uNoiseColorStrength: { value: GAS_GIANT.NOISE_COLOR_STRENGTH },
+      uHeightInfluenceBase: { value: GAS_GIANT.HEIGHT_INFLUENCE_BASE },
+      uHeightInfluenceRange: { value: GAS_GIANT.HEIGHT_INFLUENCE_RANGE },
+      uNoiseSpeedScale: { value: ANIMATION.NOISE_SPEED_SCALE },
+
+      // LAVA constants
+      uTempScale: { value: LAVA.TEMP_SCALE },
+      uTempClampMin: { value: LAVA.TEMP_CLAMP_MIN },
+      uTempClampMax: { value: LAVA.TEMP_CLAMP_MAX },
+      uPulseBase: { value: LAVA.PULSE_BASE },
+      uPulseRange: { value: LAVA.PULSE_RANGE },
+      uPulseFreq: { value: LAVA.PULSE_FREQ },
+      uSecondaryGlow: { value: LAVA.SECONDARY_GLOW },
+      uSecondaryFreq: { value: LAVA.SECONDARY_FREQ },
+      uGlowColor: { value: new THREE.Vector3(...LAVA.GLOW_COLOR) },
+      uNoiseGlowStrength: { value: LAVA.NOISE_GLOW_STRENGTH },
+      uNoiseOffsetScale: { value: LAVA.NOISE_OFFSET_SCALE },
+      uLavaAnimSpeedFactor: { value: LAVA.ANIM_SPEED_FACTOR },
+
+      // THUNDERSTORM constants
+      uFlashFreq: { value: THUNDERSTORM.FLASH_FREQ },
+      uFlashPower: { value: THUNDERSTORM.FLASH_POWER },
+      uFlashThreshold: { value: THUNDERSTORM.FLASH_THRESHOLD },
+      uFlashTimingPeriod: { value: THUNDERSTORM.FLASH_TIMING_PERIOD },
+      uLightningFreq: { value: THUNDERSTORM.LIGHTNING_FREQ },
+      uLightningPower: { value: THUNDERSTORM.LIGHTNING_POWER },
+      uLightningThreshold: { value: THUNDERSTORM.LIGHTNING_THRESHOLD },
+      uLightningTimingPeriod: { value: THUNDERSTORM.LIGHTNING_TIMING_PERIOD },
+      uLightningColor: { value: new THREE.Vector3(...THUNDERSTORM.LIGHTNING_COLOR) },
+      uLightningColorAlt: { value: new THREE.Vector3(...THUNDERSTORM.LIGHTNING_COLOR_ALT) },
+      uLightningIntensity: { value: THUNDERSTORM.LIGHTNING_INTENSITY },
+      uLightningIntensityProc: { value: THUNDERSTORM.LIGHTNING_INTENSITY_PROC },
+      uLightningUvScale: { value: new THREE.Vector2(...THUNDERSTORM.LIGHTNING_UV_SCALE) },
+      uLightningAnimSpeed: { value: THUNDERSTORM.LIGHTNING_ANIM_SPEED },
+      uHashConstant: { value: THUNDERSTORM.HASH_CONSTANT },
+
+      // PLASMA glow color override
+      uPlasmaGlowColor: { value: new THREE.Vector3(...PLASMA.GLOW_COLOR) },
     }
 
     const { cityLightIndex, scatterLightIndex, scatterHueIndex } = textureResult
