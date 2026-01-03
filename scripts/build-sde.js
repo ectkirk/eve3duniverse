@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SDE_DIR = path.join(__dirname, '../.tmp')
 const OUTPUT_FILE = path.join(__dirname, '../src/data/universe.json')
+const GRAPHICS_OUTPUT = path.join(__dirname, '../src/data/planet-graphics.json')
 
 async function parseJsonl(filename) {
   const filepath = path.join(SDE_DIR, filename)
@@ -33,7 +34,7 @@ async function parseJsonl(filename) {
 async function buildUniverseData() {
   console.log('Parsing SDE files...')
 
-  const [rawRegions, rawConstellations, rawSystems, rawStars, rawStargates, rawPlanets] =
+  const [rawRegions, rawConstellations, rawSystems, rawStars, rawStargates, rawPlanets, rawGraphics] =
     await Promise.all([
       parseJsonl('mapRegions.jsonl'),
       parseJsonl('mapConstellations.jsonl'),
@@ -41,6 +42,7 @@ async function buildUniverseData() {
       parseJsonl('mapStars.jsonl'),
       parseJsonl('mapStargates.jsonl'),
       parseJsonl('mapPlanets.jsonl'),
+      parseJsonl('graphics.jsonl'),
     ])
 
   console.log(`  Regions: ${rawRegions.length}`)
@@ -49,18 +51,32 @@ async function buildUniverseData() {
   console.log(`  Stars: ${rawStars.length}`)
   console.log(`  Stargates: ${rawStargates.length}`)
   console.log(`  Planets: ${rawPlanets.length}`)
+  console.log(`  Graphics: ${rawGraphics.length}`)
 
   const starsById = new Map()
   for (const star of rawStars) {
     starsById.set(star._key, star)
   }
 
+  const graphicsById = new Map()
+  for (const g of rawGraphics) {
+    if (g.graphicFile) {
+      graphicsById.set(g._key, g.graphicFile)
+    }
+  }
+
   const planetsBySystemId = new Map()
+  const usedGraphicIds = new Set()
   for (const planet of rawPlanets) {
     const systemId = planet.solarSystemID
     if (!planetsBySystemId.has(systemId)) {
       planetsBySystemId.set(systemId, [])
     }
+    const attrs = planet.attributes ?? {}
+    if (attrs.heightMap1) usedGraphicIds.add(attrs.heightMap1)
+    if (attrs.heightMap2) usedGraphicIds.add(attrs.heightMap2)
+    if (attrs.shaderPreset) usedGraphicIds.add(attrs.shaderPreset)
+
     planetsBySystemId.get(systemId).push({
       id: planet._key,
       typeId: planet.typeID,
@@ -72,6 +88,10 @@ async function buildUniverseData() {
       eccentricity: planet.statistics?.eccentricity ?? 0,
       locked: planet.statistics?.locked ?? false,
       position: planet.position,
+      heightMap1: attrs.heightMap1 ?? null,
+      heightMap2: attrs.heightMap2 ?? null,
+      shaderPreset: attrs.shaderPreset ?? null,
+      population: attrs.population ?? false,
     })
   }
 
@@ -145,6 +165,26 @@ async function buildUniverseData() {
   const stats = fs.statSync(OUTPUT_FILE)
   console.log(`\nOutput: ${OUTPUT_FILE}`)
   console.log(`Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
+
+  const planetGraphics = {}
+  for (const gid of usedGraphicIds) {
+    const resPath = graphicsById.get(gid)
+    if (resPath) {
+      let webpPath = resPath.toLowerCase()
+      if (webpPath.includes('/worldobject/planet/')) {
+        webpPath = webpPath.split('/worldobject/planet/')[1]
+      } else if (webpPath.includes('/planet/')) {
+        webpPath = webpPath.split('/planet/')[1]
+      }
+      webpPath = webpPath.replace('.red', '.black').replace('.dds', '.webp')
+      planetGraphics[gid] = webpPath
+    }
+  }
+
+  fs.writeFileSync(GRAPHICS_OUTPUT, JSON.stringify(planetGraphics, null, 2))
+  console.log(`\nPlanet graphics: ${GRAPHICS_OUTPUT}`)
+  console.log(`  GraphicIDs mapped: ${Object.keys(planetGraphics).length}`)
+
   console.log(`\nSummary:`)
   console.log(`  Regions: ${Object.keys(regions).length}`)
   console.log(`  Constellations: ${Object.keys(constellations).length}`)
