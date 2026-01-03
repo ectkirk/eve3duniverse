@@ -105,3 +105,27 @@ export const glowFragmentShader = `
     gl_FragColor = vec4(color, glow * intensity);
   }
 `
+
+export const heightBlitVertexShader = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`
+
+export const heightBlitFragmentShader = `
+  uniform sampler2D uNormalHeight1;
+  uniform sampler2D uNormalHeight2;
+  uniform float uRandom;
+
+  varying vec2 vUv;
+
+  void main() {
+    vec4 h1 = texture2D(uNormalHeight1, vUv);
+    vec4 h2 = texture2D(uNormalHeight2, vUv);
+    float blend = fract(uRandom * 0.01 + 0.5);
+    vec4 blended = mix(h1, h2, blend);
+    gl_FragColor = blended;
+  }
+`

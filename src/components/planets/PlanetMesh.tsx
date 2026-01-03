@@ -5,6 +5,7 @@ import { type ShaderPreset, getShaderType, getTexturePath } from './types'
 import { SCENE } from '../../constants'
 import { createLogger } from '../../utils/logger'
 import { planetVertexShader } from '../../shaders/planetShaders'
+import { useHeightMapBaker } from '../../hooks/useHeightMapBaker'
 import planetGraphics from '../../data/planet-graphics.json'
 
 const log = createLogger('PlanetMesh')
@@ -41,8 +42,7 @@ const planetFragmentShader = `
   uniform sampler2D uHeightMap2;
   uniform sampler2D uClouds;
   uniform sampler2D uCloudCap;
-  uniform sampler2D uNormalHeight1;
-  uniform sampler2D uNormalHeight2;
+  uniform sampler2D uBakedHeightMap;
   uniform sampler2D uLavaNoise;
   uniform sampler2D uLightning;
   uniform sampler2D uGasGiantMixer;
@@ -51,7 +51,7 @@ const planetFragmentShader = `
   uniform float uHasScatter;
   uniform float uHasHeightMap;
   uniform float uHasClouds;
-  uniform float uHasNormalMap;
+  uniform float uHasBakedHeightMap;
   uniform float uHasLavaNoise;
   uniform float uHasLightning;
   uniform float uHasGasGiantMixer;
@@ -75,20 +75,15 @@ const planetFragmentShader = `
   varying vec3 vBitangent;
 
   vec3 perturbNormal(vec3 normal, vec2 uv) {
-    if (uHasNormalMap < 0.5) return normal;
+    if (uHasBakedHeightMap < 0.5) return normal;
 
-    float h1 = texture2D(uNormalHeight1, uv).r;
-    float h2 = texture2D(uNormalHeight2, uv).r;
-    float height = mix(h1, h2, 0.5);
-
+    float height = texture2D(uBakedHeightMap, uv).r;
     float delta = 0.002;
-    float h1x = texture2D(uNormalHeight1, uv + vec2(delta, 0.0)).r;
-    float h2x = texture2D(uNormalHeight2, uv + vec2(delta, 0.0)).r;
-    float h1y = texture2D(uNormalHeight1, uv + vec2(0.0, delta)).r;
-    float h2y = texture2D(uNormalHeight2, uv + vec2(0.0, delta)).r;
+    float hx = texture2D(uBakedHeightMap, uv + vec2(delta, 0.0)).r;
+    float hy = texture2D(uBakedHeightMap, uv + vec2(0.0, delta)).r;
 
-    float dx = mix(h1x, h2x, 0.5) - height;
-    float dy = mix(h1y, h2y, 0.5) - height;
+    float dx = hx - height;
+    float dy = hy - height;
 
     vec3 bumpNormal = normalize(vec3(-dx * 2.0, -dy * 2.0, 1.0));
     mat3 TBN = mat3(vTangent, vBitangent, normal);
@@ -201,8 +196,7 @@ const planetFragmentShader = `
     float NdotL = dot(normalize(vWorldNormal), lightDir);
     float shadow = 0.15 + 0.85 * max(NdotL, 0.0);
 
-    // Apply normal map to lighting
-    if (uHasNormalMap > 0.5) {
+    if (uHasBakedHeightMap > 0.5) {
       vec3 worldPerturbedNormal = normalize(mat3(1.0) * perturbedNormal);
       float bumpLight = max(dot(worldPerturbedNormal, lightDir), 0.0);
       shadow = 0.15 + 0.85 * mix(max(NdotL, 0.0), bumpLight, 0.5);
@@ -404,6 +398,13 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
   const textures = useLoader(THREE.TextureLoader, textureResult.paths)
   const placeholderTexture = useMemo(() => createPlaceholderTexture(), [])
 
+  const { normalHeight1Index, normalHeight2Index } = textureResult
+  const normalHeight1Tex = normalHeight1Index >= 0 ? textures[normalHeight1Index] ?? null : null
+  const normalHeight2Tex = normalHeight2Index >= 0 ? (textures[normalHeight2Index] ?? normalHeight1Tex) : normalHeight1Tex
+
+  const randomSeed = useMemo(() => Math.floor(Math.random() * 100), [])
+  const bakedHeightMap = useHeightMapBaker(normalHeight1Tex, normalHeight2Tex, randomSeed)
+
   useEffect(() => {
     log.debug(`Loaded ${textureResult.paths.length} textures for ${presetType}`)
   }, [textureResult.paths.length, presetType])
@@ -435,9 +436,8 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       uClouds: { value: placeholderTexture },
       uCloudCap: { value: placeholderTexture },
       uHasClouds: { value: 0.0 },
-      uNormalHeight1: { value: placeholderTexture },
-      uNormalHeight2: { value: placeholderTexture },
-      uHasNormalMap: { value: 0.0 },
+      uBakedHeightMap: { value: placeholderTexture },
+      uHasBakedHeightMap: { value: 0.0 },
       uLavaNoise: { value: placeholderTexture },
       uHasLavaNoise: { value: 0.0 },
       uLightning: { value: placeholderTexture },
@@ -511,21 +511,12 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       }
     }
 
-    const { normalHeight1Index, normalHeight2Index, lavaNoiseIndex, lightningIndex } = textureResult
-    if (normalHeight1Index >= 0) {
-      const nh1Tex = getTexture(normalHeight1Index)
-      nh1Tex.wrapS = nh1Tex.wrapT = THREE.RepeatWrapping
-      uniforms.uNormalHeight1 = { value: nh1Tex }
-      uniforms.uHasNormalMap = { value: 1.0 }
-
-      if (normalHeight2Index >= 0) {
-        const nh2Tex = getTexture(normalHeight2Index)
-        nh2Tex.wrapS = nh2Tex.wrapT = THREE.RepeatWrapping
-        uniforms.uNormalHeight2 = { value: nh2Tex }
-      } else {
-        uniforms.uNormalHeight2 = { value: nh1Tex }
-      }
+    if (bakedHeightMap) {
+      uniforms.uBakedHeightMap = { value: bakedHeightMap.texture }
+      uniforms.uHasBakedHeightMap = { value: 1.0 }
     }
+
+    const { lavaNoiseIndex, lightningIndex } = textureResult
 
     if (lavaNoiseIndex >= 0) {
       const lavaNoiseTex = getTexture(lavaNoiseIndex)
@@ -562,7 +553,7 @@ export function PlanetMesh({ preset, population, scaledRadius, starPosition, sta
       fragmentShader: planetFragmentShader,
       uniforms,
     })
-  }, [textures, preset, presetType, starPosition, starColor, placeholderTexture, population, textureResult, temperature])
+  }, [textures, preset, presetType, starPosition, starColor, placeholderTexture, population, textureResult, temperature, bakedHeightMap])
 
   const meshRef = useRef<THREE.Mesh>(null)
 
