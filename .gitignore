@@ -11,7 +11,6 @@ CLAUDE.md
 .sde-yaml/
 .sde-jsonl/
 sde.zip
-resfileindex.txt
 assets/stargates/**/*.gr2
 assets/stargates/**/*.dds
 .tmp-black/

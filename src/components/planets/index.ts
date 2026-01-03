@@ -1,5 +1,6 @@
 export { PlanetMesh } from './PlanetMesh'
 export { AtmosphereMesh } from './AtmosphereMesh'
+export { AuroraMesh } from './AuroraMesh'
 export { PlanetErrorBoundary } from './PlanetErrorBoundary'
 export {
   type PresetType,

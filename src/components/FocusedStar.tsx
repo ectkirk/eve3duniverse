@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import type { SolarSystem, Planet, Star, Stargate } from '../types/universe'
 import { STARGATE_MODELS, getStarTextures } from '../types/universe'
-import { PlanetMesh, AtmosphereMesh, PlanetErrorBoundary, type OrbitParams, type ShaderPreset } from './planets'
+import { PlanetMesh, AtmosphereMesh, AuroraMesh, PlanetErrorBoundary, type OrbitParams, type ShaderPreset } from './planets'
 import shaderPresets from '../data/shader-presets.json'
 import { SCENE, SOLAR_RADIUS_M } from '../constants'
 import {
@@ -166,6 +166,9 @@ function OrbitingPlanet({ planet, starRadius, showOrbits, showOrbitLines, bodyPo
                 starPosition={starPosition}
                 starColor={starColor}
               />
+            )}
+            {(preset.type === 'gasgiant' || preset.parameters?.GeometryAnimation) && (
+              <AuroraMesh preset={preset} planetRadius={scaledRadius} />
             )}
           </Suspense>
         </PlanetErrorBoundary>
